@@ -403,9 +403,46 @@ export class CombatScene extends Phaser.Scene {
       ? { primary: 0x3a0a10, secondary: 0xc83838, accent: 0xf08080 }
       : (AXIS_COLOR[card.axis] || AXIS_COLOR.Foi);
 
+    // Cadre arrière (ombre)
+    const shadow = this.add.rectangle(2, 3, w, h, 0x000000, 0.5);
+    c.add(shadow);
+
+    // Background carte
     const bg = this.add.rectangle(0, 0, w, h, palette.primary);
     bg.setStrokeStyle(3, palette.secondary);
     c.add(bg);
+
+    // Halo radial coloré derrière l'emoji (effet pulse)
+    const halo = this.add.graphics();
+    halo.fillStyle(palette.secondary, 0.4);
+    halo.fillCircle(0, -h / 2 + 50, 30);
+    halo.fillStyle(palette.accent, 0.25);
+    halo.fillCircle(0, -h / 2 + 50, 20);
+    c.add(halo);
+    this.tweens.add({
+      targets: halo,
+      alpha: { from: 0.6, to: 1.0 },
+      duration: 1500 + Math.random() * 800,
+      yoyo: true,
+      repeat: -1,
+    });
+
+    // Ornements coins dorés
+    const orn = this.add.graphics();
+    orn.lineStyle(1, palette.accent, 0.7);
+    // Coin haut-gauche
+    orn.lineBetween(-w/2 + 4, -h/2 + 12, -w/2 + 4, -h/2 + 4);
+    orn.lineBetween(-w/2 + 4, -h/2 + 4, -w/2 + 12, -h/2 + 4);
+    // Coin haut-droit
+    orn.lineBetween(w/2 - 4, -h/2 + 12, w/2 - 4, -h/2 + 4);
+    orn.lineBetween(w/2 - 4, -h/2 + 4, w/2 - 12, -h/2 + 4);
+    // Coin bas-gauche
+    orn.lineBetween(-w/2 + 4, h/2 - 12, -w/2 + 4, h/2 - 4);
+    orn.lineBetween(-w/2 + 4, h/2 - 4, -w/2 + 12, h/2 - 4);
+    // Coin bas-droit
+    orn.lineBetween(w/2 - 4, h/2 - 12, w/2 - 4, h/2 - 4);
+    orn.lineBetween(w/2 - 4, h/2 - 4, w/2 - 12, h/2 - 4);
+    c.add(orn);
 
     // Sickness visuelle (transparence)
     if (card.sickness && !card.isBoss) {
@@ -426,9 +463,20 @@ export class CombatScene extends Phaser.Scene {
       bg.on("pointerdown", () => this.confirmSacrifice(zoneIdx));
     }
 
-    // Emoji art
-    const emoji = card.isBoss ? "👸" : this.getCardEmoji(card.axis);
-    c.add(this.add.text(0, -22, emoji, { fontSize: card.isBoss ? "40px" : "28px" }).setOrigin(0.5));
+    // Emoji art (utilise card.emoji si défini)
+    const emoji = card.isBoss ? "👸" : this.getCardEmoji(card.axis, card);
+    const emojiText = this.add.text(0, -h / 2 + 50, emoji, {
+      fontSize: card.isBoss ? "44px" : "30px",
+    }).setOrigin(0.5);
+    c.add(emojiText);
+    // Pulse subtle de l'emoji
+    this.tweens.add({
+      targets: emojiText,
+      scale: { from: 1, to: 1.06 },
+      duration: 1800 + Math.random() * 600,
+      yoyo: true,
+      repeat: -1,
+    });
 
     // Nom
     c.add(
@@ -601,10 +649,42 @@ export class CombatScene extends Phaser.Scene {
       c.setData("startY", handY);
       c.setData("handIdx", i);
 
+      // Ombre arrière
+      const shadow = this.add.rectangle(2, 3, cardW, cardH, 0x000000, 0.5);
+      c.add(shadow);
+
       const bg = this.add.rectangle(0, 0, cardW, cardH, palette.primary);
       bg.setStrokeStyle(3, palette.secondary);
       if (!playable) bg.setAlpha(0.4);
       c.add(bg);
+
+      // Halo radial pulsé derrière l'emoji
+      if (playable) {
+        const halo = this.add.graphics();
+        halo.fillStyle(palette.secondary, 0.4);
+        halo.fillCircle(0, -cardH / 2 + 38, 24);
+        halo.fillStyle(palette.accent, 0.25);
+        halo.fillCircle(0, -cardH / 2 + 38, 16);
+        c.add(halo);
+        this.tweens.add({
+          targets: halo,
+          alpha: { from: 0.6, to: 1.0 },
+          duration: 1500 + Math.random() * 800,
+          yoyo: true,
+          repeat: -1,
+        });
+      }
+
+      // Ornements coins dorés
+      const orn = this.add.graphics();
+      orn.lineStyle(1, palette.accent, 0.7);
+      [-1, 1].forEach((sx) => [-1, 1].forEach((sy) => {
+        const cx = sx * (cardW / 2 - 4);
+        const cy = sy * (cardH / 2 - 4);
+        orn.lineBetween(cx, cy + sy * 8, cx, cy);
+        orn.lineBetween(cx, cy, cx + sx * 8, cy);
+      }));
+      c.add(orn);
 
       // Coût (cercle haut-gauche)
       const costColor = playable ? palette.secondary : 0x666666;
@@ -618,8 +698,20 @@ export class CombatScene extends Phaser.Scene {
         fontStyle: "bold",
       }).setOrigin(0.5));
 
-      // Emoji
-      c.add(this.add.text(0, -16, this.getCardEmoji(card.axis), { fontSize: "26px" }).setOrigin(0.5));
+      // Emoji spécifique du monstre
+      const emojiText = this.add.text(0, -cardH / 2 + 38, this.getCardEmoji(card.axis, card), {
+        fontSize: "28px",
+      }).setOrigin(0.5);
+      c.add(emojiText);
+      if (playable) {
+        this.tweens.add({
+          targets: emojiText,
+          scale: { from: 1, to: 1.06 },
+          duration: 1800 + Math.random() * 600,
+          yoyo: true,
+          repeat: -1,
+        });
+      }
 
       // Nom
       c.add(this.add.text(0, cardH / 2 - 26, card.name, {
@@ -831,7 +923,8 @@ export class CombatScene extends Phaser.Scene {
     }
   }
 
-  private getCardEmoji(axis: Axis): string {
+  private getCardEmoji(axis: Axis, card?: Card): string {
+    if (card?.emoji) return card.emoji;
     const map: Record<Axis, string> = {
       Orgueil: "👑", Avarice: "💰", Luxure: "🌹", Envie: "🐍",
       Gourmandise: "🍷", Colere: "🔥", Paresse: "🌫️",
@@ -1183,10 +1276,42 @@ export class CombatScene extends Phaser.Scene {
       fontFamily: "monospace", fontSize: "26px", color: "#fff5dc", fontStyle: "bold",
     }).setOrigin(0.5));
 
-    // Emoji
-    this.cardZoomOverlay.add(this.add.text(cx, cy - 60, this.getCardEmoji(card.axis), {
+    // Halo derrière l'emoji
+    const halo = this.add.graphics();
+    halo.fillStyle(palette.secondary, 0.4);
+    halo.fillCircle(cx, cy - 60, 80);
+    halo.fillStyle(palette.accent, 0.25);
+    halo.fillCircle(cx, cy - 60, 50);
+    this.cardZoomOverlay.add(halo);
+    this.tweens.add({
+      targets: halo,
+      alpha: { from: 0.7, to: 1.0 },
+      duration: 1400,
+      yoyo: true,
+      repeat: -1,
+    });
+
+    // Emoji spécifique
+    const zoomEmoji = this.add.text(cx, cy - 60, this.getCardEmoji(card.axis, card), {
       fontSize: "100px",
-    }).setOrigin(0.5));
+    }).setOrigin(0.5);
+    this.cardZoomOverlay.add(zoomEmoji);
+    this.tweens.add({
+      targets: zoomEmoji,
+      scale: { from: 1, to: 1.08 },
+      duration: 1700,
+      yoyo: true,
+      repeat: -1,
+    });
+
+    // Flavor text si présent
+    if (card.flavor) {
+      this.cardZoomOverlay.add(this.add.text(cx, cy + 20, `« ${card.flavor} »`, {
+        fontFamily: "Georgia, serif", fontSize: "11px",
+        color: "#a87a3a", fontStyle: "italic",
+        align: "center", wordWrap: { width: cardW - 40 },
+      }).setOrigin(0.5));
+    }
 
     // Nom
     this.cardZoomOverlay.add(this.add.text(cx, cy + 40, card.name, {

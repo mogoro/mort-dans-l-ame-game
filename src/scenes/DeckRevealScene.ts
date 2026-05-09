@@ -58,10 +58,51 @@ export class DeckRevealScene extends Phaser.Scene {
 
       const cardContainer = this.add.container(x, cardsY).setScale(0).setAlpha(0);
 
+      // Ombre
+      cardContainer.add(this.add.rectangle(2, 3, cardW, cardH, 0x000000, 0.5));
+
       // Carte fond
       const bg = this.add.rectangle(0, 0, cardW, cardH, palette.primary);
       bg.setStrokeStyle(3, palette.secondary);
       cardContainer.add(bg);
+
+      // Halo radial qui pulse
+      const halo = this.add.graphics();
+      halo.fillStyle(palette.secondary, 0.4);
+      halo.fillCircle(0, -cardH / 4, 26);
+      halo.fillStyle(palette.accent, 0.25);
+      halo.fillCircle(0, -cardH / 4, 16);
+      cardContainer.add(halo);
+      this.tweens.add({
+        targets: halo,
+        alpha: { from: 0.6, to: 1 },
+        duration: 1500 + Math.random() * 600,
+        yoyo: true,
+        repeat: -1,
+      });
+
+      // Ornements coins
+      const orn = this.add.graphics();
+      orn.lineStyle(1, palette.accent, 0.7);
+      [-1, 1].forEach((sx) => [-1, 1].forEach((sy) => {
+        const px = sx * (cardW / 2 - 4);
+        const py = sy * (cardH / 2 - 4);
+        orn.lineBetween(px, py + sy * 8, px, py);
+        orn.lineBetween(px, py, px + sx * 8, py);
+      }));
+      cardContainer.add(orn);
+
+      // Emoji spécifique
+      const emoji = card.emoji || "✦";
+      const emojiText = this.add.text(0, -cardH / 4, emoji, { fontSize: "32px" }).setOrigin(0.5);
+      cardContainer.add(emojiText);
+      this.tweens.add({
+        targets: emojiText,
+        scale: { from: 1, to: 1.08 },
+        duration: 1700,
+        yoyo: true,
+        repeat: -1,
+      });
 
       // Coût en cercle
       const costCircle = this.add.circle(-cardW / 2 + 16, -cardH / 2 + 16, 12, palette.secondary);
