@@ -1,29 +1,44 @@
 import Phaser from "phaser";
 import { GAME_WIDTH, GAME_HEIGHT } from "../main";
-import { GameState, getProfileNature } from "../systems/GameState";
-import { AXIS_COLOR, type Card } from "../data/cards";
+import { GameState, getProfileNature, registerCardPlay } from "../systems/GameState";
+import { AXIS_COLOR, type Card, type Sigil, applyFatigue } from "../data/cards";
 import type { Axis } from "../data/events";
+import { CIRCLES, type CircleDef, type BossSpecial } from "../data/circles";
 import { audio } from "../systems/AudioSystem";
-import { Settings, animSpeed, shakeFactor, difficultyMul, vibrate, DEBUG } from "../systems/Settings";
+import { Settings, animSpeed, shakeFactor, difficultyMul, vibrate } from "../systems/Settings";
+import { judgeOpeningLine, judgeLineForAxis, applyAxisShift, recordCombatResult } from "../systems/Judge";
+import { hasTalentEffect } from "../systems/Talents";
+import { hasRelic } from "../systems/Relics";
+import { pullActiveDebts, resolveDebt } from "../systems/Economy";
 
 interface BoardSlot {
   card: (Card & {
     currentHp: number;
+    maxHpAtPlay?: number;
     isBoss?: boolean;
     sickness?: boolean;
-    bleeding?: number;   // Saignement : perd 1 HP/tour pendant N tours
-    block?: number;      // Bloc absorbé avant HP
-    vulnerable?: number; // Reçoit +50% dégâts pendant N tours
+    bleeding?: number;
+    block?: number;
+    vulnerable?: number;
+    weak?: number;       // -25% atk
+    strong?: number;     // +25% atk
+    poisoned?: number;
+    flammable?: number;
+    frozen?: number;
+    facedown?: boolean;  // B.5 counter
+    chantReady?: boolean; // B.7
+    boundCircle?: number;
+    bossPhase?: 1 | 2;
   }) | null;
 }
 
-const HAND_LIMIT = 6; // 2.9
+const HAND_LIMIT = 6;
 
 const VOICE_LINES = {
   enter: [
     "Tu entres dans le cercle. Le vent souffle.",
-    "Cléopâtre te jauge.",
-    "Tu vois passer ceux que tu as désirés. Ils ne te regardent plus.",
+    "Le boss te jauge.",
+    "Cette fois, tu ne fuiras pas.",
   ],
   cardSummoned: [
     "Tu poses ce que tu as eu pour pouvoir.",
@@ -58,6 +73,14 @@ function pickLine(category: keyof typeof VOICE_LINES): string {
   return lines[Math.floor(Math.random() * lines.length)];
 }
 
+const RANDOM_EVENTS: Array<{ msg: string; effect: string }> = [
+  { msg: "Un cri d'oiseau. Une carte gagne +1 ATK.", effect: "buff_atk" },
+  { msg: "Un vent froid. Une carte gagne +1 HP.", effect: "buff_hp" },
+  { msg: "Une étincelle. Une zone vide brûle.", effect: "burn_zone" },
+  { msg: "Le silence. Le boss saute son attaque.", effect: "boss_skip" },
+  { msg: "Ta mère t'appelle. Pioche +1.", effect: "draw_extra" },
+];
+
 export class CombatScene extends Phaser.Scene {
   private axisPool: Record<Axis, number> = {} as any;
   private playerBoard: BoardSlot[] = [];
@@ -72,17 +95,16 @@ export class CombatScene extends Phaser.Scene {
   private particles?: Phaser.GameObjects.Particles.ParticleEmitter;
   private bloodParticles?: Phaser.GameObjects.Particles.ParticleEmitter;
 
-  // sacrifice : index du monstre joueur sélectionné comme sacrifice + carte qui attend
   private pendingSummon: { handIdx: number; targetZone: number } | null = null;
-  private rerollUsed = false;     // 8.9 - 1 reroll par combat
-  private cardsSacrificed = 0;    // pour score
+  private rerollUsed = false;
+  private rerollMaxUses = 1;
+  private cardsSacrificed = 0;
+  private cardsPlayedThisCombat: string[] = []; // pour telemetry
   private playerHp = 30;
   private playerMaxHp = 30;
   private playerHpBar?: Phaser.GameObjects.Rectangle;
   private playerHpText?: Phaser.GameObjects.Text;
-  private playerAvatar?: Phaser.GameObjects.Image;
 
-  // UI refs
   private bossHpText?: Phaser.GameObjects.Text;
   private bossHpFill?: Phaser.GameObjects.Rectangle;
   private judgeBubble?: Phaser.GameObjects.Text;
@@ -94,91 +116,154 @@ export class CombatScene extends Phaser.Scene {
   private cardZoomOverlay?: Phaser.GameObjects.Container;
   private longPressTimer: ReturnType<typeof setTimeout> | null = null;
 
+  // B.9 — phase 2 du boss
+  private bossPhase: 1 | 2 = 1;
+  private bossAxis: Axis = "Justice";
+  private circleDef!: CircleDef;
+  private bossSpecials: BossSpecial[] = [];
+  private appeaseStacks = 0;  // D.5
+
+  // E.4 — élite ?
+  private isElite = false;
+  // pioche stratégique G.1
+  private drawPick: Card[] | null = null;
+
   constructor() {
     super("Combat");
   }
 
-  create(): void {
+  create(data?: { circleIdx?: number; isElite?: boolean }): void {
     this.cameras.main.fadeIn(800, 0, 0, 0);
 
+    const circleIdx = data?.circleIdx ?? GameState.currentCircle ?? 0;
+    this.isElite = !!data?.isElite;
+    this.circleDef = CIRCLES[circleIdx % CIRCLES.length];
+    this.bossSpecials = this.circleDef.specials;
+    this.bossAxis = this.circleDef.axis;
+    this.bossPhase = 1;
+
+    // Pool d'axe = profile du joueur, min 10
     this.axisPool = { ...GameState.profile };
     Object.keys(this.axisPool).forEach((a) => {
       if (this.axisPool[a as Axis] < 10) this.axisPool[a as Axis] = 10;
     });
 
+    // Deck
     this.deck = this.shuffle([...GameState.deck]);
     this.discard = [];
     this.hand = [];
     this.playerBoard = [{ card: null }, { card: null }, { card: null }, { card: null }];
     this.enemyBoard = [{ card: null }, { card: null }, { card: null }, { card: null }];
 
-    // Boss adapté au profil (nature ombre/lumière/neutre)
-    const nature = getProfileNature();
-    const bossDef = this.pickBossForNature(nature);
-
-    // Boss — adapté difficulté + pacifist
+    // Boss
     const dm = difficultyMul();
-    let bossHp = bossDef.hp * dm.bossHp;
-    let bossAtk = bossDef.atk * dm.bossAtk;
+    let bossHp = this.circleDef.bossHp * dm.bossHp;
+    let bossAtk = this.circleDef.bossAtk * dm.bossAtk;
+    if (this.isElite) {
+      bossHp *= 1.5;
+      bossAtk *= 1.3;
+    }
     if (Settings.pacifist) bossHp /= 2;
     bossHp = Math.round(bossHp);
     bossAtk = Math.round(bossAtk);
 
     this.enemyBoard[1] = {
       card: {
-        id: bossDef.id,
-        name: bossDef.name,
-        axis: bossDef.axis,
+        id: this.circleDef.bossName.toLowerCase(),
+        name: this.circleDef.bossName,
+        axis: this.circleDef.axis,
         cost: 0,
         atk: bossAtk,
         hp: bossHp,
         currentHp: bossHp,
+        maxHpAtPlay: bossHp,
         isBoss: true,
-        emoji: bossDef.emoji,
+        emoji: this.circleDef.bossEmoji,
+        bossPhase: 1,
       } as any,
     };
-    (this as any).bossEmoji = bossDef.emoji;
-    (this as any).bossName = bossDef.name;
     this.bossMaxHp = bossHp;
     this.cardsSacrificed = 0;
+    this.cardsPlayedThisCombat = [];
     this.rerollUsed = false;
+    // talent Calme niveau 1 = +1 reroll
+    this.rerollMaxUses = hasTalentEffect("reroll_plus_1") ? 2 : 1;
 
-    // HP joueur
-    this.playerMaxHp = Math.round(30 * dm.playerStartHp);
+    // HP joueur (modulé par difficulté + reliques + talents)
+    let baseHp = 30;
+    if (hasTalentEffect("start_hp_5")) baseHp += 5;
+    if (hasTalentEffect("start_hp_10")) baseHp += 10;
+    // C.2 anneau du tiède
+    if (hasRelic("balanced_hp_20")) {
+      const balanced = (Object.values(GameState.profile) as number[]).every((v) => v >= 40 && v <= 60);
+      if (balanced) baseHp += 20;
+    }
+    this.playerMaxHp = Math.round(baseHp * dm.playerStartHp);
     this.playerHp = this.playerMaxHp;
 
-    this.drawHand(4);
+    // Pioche initiale (modulée par talent)
+    let drawCount = 4;
+    if (hasTalentEffect("draw_plus_1")) drawCount++;
+    // C.2 plume d'argent au premier combat
+    if (circleIdx === 0 && hasRelic("first_combat_draw_1")) drawCount++;
+
+    this.drawHand(drawCount);
     this.turn = 1;
     this.finished = false;
     this.pendingSummon = null;
+
+    // D.3 — Plutos vole une carte au début
+    if (this.bossSpecials.includes("steal_card") && this.hand.length > 0) {
+      const idx = Math.floor(Math.random() * this.hand.length);
+      const stolen = this.hand.splice(idx, 1)[0];
+      this.time.delayedCall(1500, () => {
+        this.setJudgeMessage(`${this.circleDef.bossName} te vole « ${stolen.name} ».`);
+      });
+    }
+
+    // A.3 — dettes héritées
+    const debts = pullActiveDebts();
+    debts.forEach((d) => {
+      if (d.effect === "extra_enemy") {
+        // Spawn un minion supplémentaire
+        const enemyMinion: Card = {
+          id: "debt-minion",
+          name: "Dette",
+          axis: this.bossAxis,
+          cost: 0, atk: 3, hp: 5,
+          emoji: "💀",
+          flavor: d.reason,
+        };
+        const freeSlot = this.enemyBoard.findIndex((s) => !s.card);
+        if (freeSlot >= 0) {
+          this.enemyBoard[freeSlot] = {
+            card: { ...enemyMinion, currentHp: 5 } as any,
+          };
+        }
+      }
+      if (d.effect === "axis_drain") {
+        Object.keys(this.axisPool).forEach((a) => {
+          this.axisPool[a as Axis] = Math.max(5, this.axisPool[a as Axis] - 5);
+        });
+      }
+      resolveDebt(d.id);
+    });
 
     this.renderBackground();
     this.createParticles();
     this.renderScene();
 
     audio.playPhase("combat");
-    this.setJudgeMessage(pickLine("enter"));
-  }
 
-  // 3 boss différents selon nature du profil
-  private pickBossForNature(nature: "ombre" | "lumiere" | "neutre"): {
-    id: string; name: string; emoji: string; atk: number; hp: number; axis: any;
-  } {
-    if (nature === "ombre") {
-      return { id: "cleopatre", name: "Cléopâtre", emoji: "👸", atk: 8, hp: 32, axis: "Luxure" };
-    } else if (nature === "lumiere") {
-      return { id: "seraphin",  name: "Séraphin Pâle", emoji: "👼", atk: 7, hp: 36, axis: "Foi" };
-    } else {
-      return { id: "minos",     name: "Minos le Juge", emoji: "🧙‍♂️", atk: 7, hp: 30, axis: "Justice" };
-    }
+    // F.5 — voice line basée sur profil
+    const opener = judgeOpeningLine();
+    this.setJudgeMessage(opener);
   }
 
   // ============================================================================
-  // Particles & camera FX
+  // FX
   // ============================================================================
-
   private createParticles(): void {
-    // Sang : petits squares rouges
     const bloodTex = this.makePixelTexture("blood", 4, 4, 0xc83838);
     this.bloodParticles = this.add.particles(0, 0, bloodTex, {
       lifespan: { min: 400, max: 800 },
@@ -190,7 +275,6 @@ export class CombatScene extends Phaser.Scene {
     });
     this.bloodParticles.setDepth(500);
 
-    // Étoiles dorées (succès / heal)
     const goldTex = this.makePixelTexture("gold", 3, 3, 0xffd870);
     this.particles = this.add.particles(0, 0, goldTex, {
       lifespan: { min: 600, max: 1200 },
@@ -213,15 +297,11 @@ export class CombatScene extends Phaser.Scene {
   }
 
   private spawnBlood(x: number, y: number, count = 15): void {
-    if (this.bloodParticles) {
-      this.bloodParticles.emitParticleAt(x, y, count);
-    }
+    if (this.bloodParticles) this.bloodParticles.emitParticleAt(x, y, count);
   }
 
   private spawnGold(x: number, y: number, count = 12): void {
-    if (this.particles) {
-      this.particles.emitParticleAt(x, y, count);
-    }
+    if (this.particles) this.particles.emitParticleAt(x, y, count);
   }
 
   private cameraShake(intensity = 0.005, duration = 200): void {
@@ -229,32 +309,17 @@ export class CombatScene extends Phaser.Scene {
     this.cameras.main.shake(duration * animSpeed(), intensity * shakeFactor());
   }
 
-  // 1.1 Hit-stop : pause brève sur dégâts importants
-  private hitStop(durationMs = 60): Promise<void> {
-    if (Settings.reduceFlashes) return Promise.resolve();
-    return new Promise((resolve) => {
-      this.time.timeScale = 0.001;
-      setTimeout(() => {
-        this.time.timeScale = 1;
-        resolve();
-      }, durationMs);
-    });
-  }
-
   // ============================================================================
-  // Background statique (n'est pas redessiné à chaque renderScene)
+  // BG
   // ============================================================================
-
   private renderBackground(): void {
-    // 5.7 Palette par cercle - Luxure = pourpre/rose
-    const c1 = 0x1a0a14;
-    const c2 = 0x3a1428;
+    const c1 = this.circleDef.bgTop;
+    const c2 = this.circleDef.bgBot;
     const bg = this.add.graphics();
     bg.fillGradientStyle(c1, c1, c2, c2, 1);
     bg.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
     bg.setDepth(-100);
 
-    // 5.6 Vignette (bords sombres)
     const vignette = this.add.graphics();
     vignette.setDepth(2000);
     const center = { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2 };
@@ -263,7 +328,6 @@ export class CombatScene extends Phaser.Scene {
       vignette.fillStyle(0x000000, alpha * 0.04);
       vignette.fillCircle(center.x, center.y, r);
     }
-    // Bordures noires fines aux 4 coins (vignette plus marquée)
     const edge = this.add.graphics();
     edge.setDepth(1500);
     edge.fillStyle(0x000000, 0.3);
@@ -272,7 +336,6 @@ export class CombatScene extends Phaser.Scene {
     edge.fillRect(0, 0, 20, GAME_HEIGHT);
     edge.fillRect(GAME_WIDTH - 20, 0, 20, GAME_HEIGHT);
 
-    // Bougies aux 4 coins
     const positions = [
       { x: 50, y: 80 },
       { x: GAME_WIDTH - 50, y: 80 },
@@ -286,7 +349,6 @@ export class CombatScene extends Phaser.Scene {
       halo.fillStyle(0xffcc66, 0.12);
       halo.fillCircle(pos.x, pos.y, 50);
       halo.setDepth(-50);
-
       const flame = this.add.circle(pos.x, pos.y, 4, 0xffd870);
       flame.setDepth(-40);
       this.tweens.add({
@@ -299,7 +361,6 @@ export class CombatScene extends Phaser.Scene {
       this.candleFlames.push(flame);
     });
 
-    // Texture table en bois
     const wood = this.add.graphics();
     wood.fillStyle(0x2a1408, 0.4);
     for (let x = 0; x < GAME_WIDTH; x += 4) {
@@ -309,15 +370,13 @@ export class CombatScene extends Phaser.Scene {
   }
 
   // ============================================================================
-  // Render scène (board + hand + hud)
+  // Render
   // ============================================================================
-
   private renderScene(): void {
     if (this.boardContainer) this.boardContainer.destroy();
     if (this.handContainer) this.handContainer.destroy();
     if (this.hudContainer) this.hudContainer.destroy();
     if (this.bellContainer) this.bellContainer.destroy();
-
     this.renderBoard();
     this.renderHand();
     this.renderBell();
@@ -327,14 +386,12 @@ export class CombatScene extends Phaser.Scene {
   private renderBoard(): void {
     this.boardContainer = this.add.container(0, 0);
 
-    // Le Juge (haut)
     const judgeY = 90;
     const judgePortrait = this.add.container(60, judgeY);
     const judgeCircle = this.add.circle(0, 0, 32, 0x4a0a14);
     judgeCircle.setStrokeStyle(3, 0xc83838);
     judgePortrait.add(judgeCircle);
-    const bossEmojiText = (this as any).bossEmoji || "👸";
-    judgePortrait.add(this.add.text(0, 0, bossEmojiText, { fontSize: "32px" }).setOrigin(0.5));
+    judgePortrait.add(this.add.text(0, 0, this.circleDef.bossEmoji, { fontSize: "32px" }).setOrigin(0.5));
     this.tweens.add({
       targets: judgeCircle,
       scale: { from: 1, to: 1.1 },
@@ -344,7 +401,6 @@ export class CombatScene extends Phaser.Scene {
     });
     this.boardContainer.add(judgePortrait);
 
-    // Bulle de dialogue
     const bubbleBg = this.add.rectangle(120, judgeY - 18, GAME_WIDTH - 140, 64, 0x000000, 0.7);
     bubbleBg.setOrigin(0, 0);
     bubbleBg.setStrokeStyle(1, 0xd4a040, 0.6);
@@ -358,7 +414,6 @@ export class CombatScene extends Phaser.Scene {
     });
     this.boardContainer.add(this.judgeBubble);
 
-    // Plateau ennemi
     const enemyY = 230;
     const slotW = 90;
     const slotH = 120;
@@ -370,16 +425,15 @@ export class CombatScene extends Phaser.Scene {
       this.boardContainer?.add(this.renderSlot(x, enemyY, slot, slotW, slotH, false, i));
     });
 
-    // Banner tour
-    const banner = this.add.text(GAME_WIDTH / 2, 360, `— TOUR ${this.turn} ${this.pendingSummon ? "· SACRIFICE" : "· TA PHASE"} —`, {
+    const phaseTag = this.bossPhase === 2 ? "  · ENRAGÉ" : "";
+    const banner = this.add.text(GAME_WIDTH / 2, 360, `— TOUR ${this.turn} ${this.pendingSummon ? "· SACRIFICE" : "· TA PHASE"}${phaseTag} —`, {
       fontFamily: "Georgia, serif",
       fontSize: "11px",
-      color: this.pendingSummon ? "#ff8888" : "#a87a3a",
+      color: this.pendingSummon ? "#ff8888" : (this.bossPhase === 2 ? "#ff4040" : "#a87a3a"),
       fontStyle: "italic",
     }).setOrigin(0.5);
     this.boardContainer.add(banner);
 
-    // Plateau joueur
     const playerY = 460;
     this.playerBoard.forEach((slot, i) => {
       const x = startX + i * (slotW + 8);
@@ -387,22 +441,12 @@ export class CombatScene extends Phaser.Scene {
     });
   }
 
-  private renderSlot(
-    x: number,
-    y: number,
-    slot: BoardSlot,
-    w: number,
-    h: number,
-    isPlayer: boolean,
-    zoneIdx: number
-  ): Phaser.GameObjects.Container {
+  private renderSlot(x: number, y: number, slot: BoardSlot, w: number, h: number, isPlayer: boolean, zoneIdx: number): Phaser.GameObjects.Container {
     const c = this.add.container(x, y);
 
     if (!slot.card) {
       const bg = this.add.rectangle(0, 0, w, h, 0x000000, 0.3);
       bg.setStrokeStyle(2, 0x8a5018, 0.4);
-
-      // Si en mode "drag" en cours, hilite zones libres joueur
       const draggingFromHand = this.hand.length > 0 && (this as any).dragSourceIdx != null;
       if (isPlayer && draggingFromHand) {
         bg.setStrokeStyle(2, 0xffcc66, 0.9);
@@ -414,8 +458,6 @@ export class CombatScene extends Phaser.Scene {
           repeat: -1,
         });
       }
-
-      // Si on est en mode pendingSummon (sacrifice), permettre clic sur monstres joueur
       c.add(bg);
       if (isPlayer) {
         c.add(this.add.text(0, 0, "vide", {
@@ -429,20 +471,44 @@ export class CombatScene extends Phaser.Scene {
     }
 
     const card = slot.card;
+    // B.5 — face cachée
+    if (card.facedown) {
+      const bg = this.add.rectangle(0, 0, w, h, 0x1a1408);
+      bg.setStrokeStyle(2, 0xa87a3a, 0.7);
+      c.add(bg);
+      c.add(this.add.text(0, 0, "?", {
+        fontSize: "40px",
+        color: "#a87a3a",
+      }).setOrigin(0.5));
+      return c;
+    }
+
     const palette = card.isBoss
       ? { primary: 0x3a0a10, secondary: 0xc83838, accent: 0xf08080 }
       : (AXIS_COLOR[card.axis] || AXIS_COLOR.Foi);
 
-    // Cadre arrière (ombre)
     const shadow = this.add.rectangle(2, 3, w, h, 0x000000, 0.5);
     c.add(shadow);
 
-    // Background carte
     const bg = this.add.rectangle(0, 0, w, h, palette.primary);
     bg.setStrokeStyle(3, palette.secondary);
     c.add(bg);
 
-    // Halo radial coloré derrière l'emoji (effet pulse)
+    // Ornement extra si phase 2 boss
+    if (card.isBoss && this.bossPhase === 2) {
+      const phaseRing = this.add.graphics();
+      phaseRing.lineStyle(3, 0xff4040, 0.8);
+      phaseRing.strokeRect(-w / 2 - 3, -h / 2 - 3, w + 6, h + 6);
+      this.tweens.add({
+        targets: phaseRing,
+        alpha: { from: 0.5, to: 1 },
+        duration: 600,
+        yoyo: true,
+        repeat: -1,
+      });
+      c.add(phaseRing);
+    }
+
     const halo = this.add.graphics();
     halo.fillStyle(palette.secondary, 0.4);
     halo.fillCircle(0, -h / 2 + 50, 30);
@@ -457,29 +523,20 @@ export class CombatScene extends Phaser.Scene {
       repeat: -1,
     });
 
-    // Ornements coins dorés
     const orn = this.add.graphics();
     orn.lineStyle(1, palette.accent, 0.7);
-    // Coin haut-gauche
     orn.lineBetween(-w/2 + 4, -h/2 + 12, -w/2 + 4, -h/2 + 4);
     orn.lineBetween(-w/2 + 4, -h/2 + 4, -w/2 + 12, -h/2 + 4);
-    // Coin haut-droit
     orn.lineBetween(w/2 - 4, -h/2 + 12, w/2 - 4, -h/2 + 4);
     orn.lineBetween(w/2 - 4, -h/2 + 4, w/2 - 12, -h/2 + 4);
-    // Coin bas-gauche
     orn.lineBetween(-w/2 + 4, h/2 - 12, -w/2 + 4, h/2 - 4);
     orn.lineBetween(-w/2 + 4, h/2 - 4, -w/2 + 12, h/2 - 4);
-    // Coin bas-droit
     orn.lineBetween(w/2 - 4, h/2 - 12, w/2 - 4, h/2 - 4);
     orn.lineBetween(w/2 - 4, h/2 - 4, w/2 - 12, h/2 - 4);
     c.add(orn);
 
-    // Sickness visuelle (transparence)
-    if (card.sickness && !card.isBoss) {
-      bg.setAlpha(0.6);
-    }
+    if (card.sickness && !card.isBoss) bg.setAlpha(0.6);
 
-    // En mode pendingSummon : rendre les cartes joueur cliquables comme sacrifice
     if (isPlayer && this.pendingSummon != null && !card.isBoss) {
       bg.setStrokeStyle(3, 0xff8888);
       this.tweens.add({
@@ -493,13 +550,11 @@ export class CombatScene extends Phaser.Scene {
       bg.on("pointerdown", () => this.confirmSacrifice(zoneIdx));
     }
 
-    // Emoji art (utilise card.emoji si défini, sinon emoji axe)
-    const emoji = card.isBoss ? ((this as any).bossEmoji || "👸") : this.getCardEmoji(card.axis, card);
+    const emoji = card.isBoss ? this.circleDef.bossEmoji : this.getCardEmoji(card.axis, card);
     const emojiText = this.add.text(0, -h / 2 + 50, emoji, {
       fontSize: card.isBoss ? "44px" : "30px",
     }).setOrigin(0.5);
     c.add(emojiText);
-    // Pulse subtle de l'emoji
     this.tweens.add({
       targets: emojiText,
       scale: { from: 1, to: 1.06 },
@@ -508,9 +563,11 @@ export class CombatScene extends Phaser.Scene {
       repeat: -1,
     });
 
-    // Nom
+    let nameText = card.name;
+    if (card.consecrated) nameText += " ✨";
+    if (card.fatigued) nameText += " · fatiguée";
     c.add(
-      this.add.text(0, h / 2 - 26, card.name, {
+      this.add.text(0, h / 2 - 26, nameText, {
         fontFamily: "Georgia, serif",
         fontSize: "9px",
         color: "#" + palette.accent.toString(16).padStart(6, "0"),
@@ -520,7 +577,6 @@ export class CombatScene extends Phaser.Scene {
       }).setOrigin(0.5)
     );
 
-    // ATK / HP
     c.add(this.add.text(-w / 2 + 8, h / 2 - 6, `⚔${card.atk}`, {
       fontFamily: "monospace",
       fontSize: "11px",
@@ -535,99 +591,91 @@ export class CombatScene extends Phaser.Scene {
       fontStyle: "bold",
     }).setOrigin(1, 1));
 
-    // 2.1 Sigils icons sur la carte (max 2 visibles en haut-droite)
+    // Sigils
     const sigilIcons: Record<string, string> = {
       bleed: "🩸", shield: "🛡", swift: "⚡", vampire: "🦇",
+      counter: "🪤", chant: "🎶", morph: "🪬", guardian: "💎",
+      venom: "🧪", freeze: "❄", burn: "🔥",
     };
     if (card.sigils && card.sigils.length > 0) {
-      card.sigils.slice(0, 2).forEach((sig, idx) => {
+      card.sigils.slice(0, 3).forEach((sig, idx) => {
         c.add(this.add.text(w / 2 - 4 - idx * 14, -h / 2 + 4, sigilIcons[sig] || "✦", {
           fontSize: "11px",
         }).setOrigin(1, 0));
       });
     }
 
-    // Statut Saignement visible
+    // Statuts visibles
+    let sty = -h / 2 + 4;
     if ((card.bleeding || 0) > 0) {
-      c.add(this.add.text(-w / 2 + 4, -h / 2 + 4, `🩸${card.bleeding}`, {
-        fontSize: "9px",
-        color: "#ff6060",
-      }).setOrigin(0, 0));
+      c.add(this.add.text(-w / 2 + 4, sty, `🩸${card.bleeding}`, { fontSize: "9px", color: "#ff6060" }).setOrigin(0, 0));
+      sty += 11;
     }
-    // Statut Bloc visible
     if ((card.block || 0) > 0) {
-      c.add(this.add.text(-w / 2 + 4, -h / 2 + 16, `🛡${card.block}`, {
-        fontSize: "9px",
-        color: "#60a0e0",
-      }).setOrigin(0, 0));
+      c.add(this.add.text(-w / 2 + 4, sty, `🛡${card.block}`, { fontSize: "9px", color: "#60a0e0" }).setOrigin(0, 0));
+      sty += 11;
+    }
+    if ((card.poisoned || 0) > 0) {
+      c.add(this.add.text(-w / 2 + 4, sty, `🧪${card.poisoned}`, { fontSize: "9px", color: "#80f080" }).setOrigin(0, 0));
+      sty += 11;
+    }
+    if ((card.frozen || 0) > 0) {
+      c.add(this.add.text(-w / 2 + 4, sty, `❄${card.frozen}`, { fontSize: "9px", color: "#a0d8f0" }).setOrigin(0, 0));
+      sty += 11;
+    }
+    if ((card.weak || 0) > 0) {
+      c.add(this.add.text(-w / 2 + 4, sty, `⬇${card.weak}`, { fontSize: "9px", color: "#a08080" }).setOrigin(0, 0));
+      sty += 11;
+    }
+    if ((card.strong || 0) > 0) {
+      c.add(this.add.text(-w / 2 + 4, sty, `⬆${card.strong}`, { fontSize: "9px", color: "#f0c080" }).setOrigin(0, 0));
     }
 
     return c;
   }
 
   // ============================================================================
-  // Bell (cloche fin de tour Inscryption-style)
+  // Bell
   // ============================================================================
-
   private renderBell(): void {
     this.bellContainer = this.add.container(GAME_WIDTH - 60, GAME_HEIGHT - 40);
-
-    // Bell shape (CSS-like en Phaser : ellipse + triangle)
     const bellGfx = this.add.graphics();
     bellGfx.fillStyle(0xc09040);
     bellGfx.fillEllipse(0, 0, 50, 40);
     bellGfx.fillStyle(0xa07020);
-    bellGfx.fillRect(-2, -22, 4, 8); // anse
+    bellGfx.fillRect(-2, -22, 4, 8);
     bellGfx.fillStyle(0xe0c060);
-    bellGfx.fillCircle(0, 12, 4); // battant
+    bellGfx.fillCircle(0, 12, 4);
     this.bellContainer.add(bellGfx);
+    this.bellContainer.add(this.add.text(0, 30, "FIN", {
+      fontFamily: "Georgia, serif", fontSize: "9px", color: "#d4a040", fontStyle: "italic",
+    }).setOrigin(0.5));
 
-    // Texte sous la cloche
-    this.bellContainer.add(
-      this.add.text(0, 30, "FIN", {
-        fontFamily: "Georgia, serif",
-        fontSize: "9px",
-        color: "#d4a040",
-        fontStyle: "italic",
-      }).setOrigin(0.5)
-    );
-
-    // Hit area
     const hit = this.add.circle(0, 0, 32, 0x000000, 0.001);
     hit.setInteractive({ useHandCursor: true });
     this.bellContainer.add(hit);
-
-    hit.on("pointerover", () => {
-      this.tweens.add({ targets: bellGfx, scale: 1.1, duration: 200 });
-    });
-    hit.on("pointerout", () => {
-      this.tweens.add({ targets: bellGfx, scale: 1, duration: 200 });
-    });
+    hit.on("pointerover", () => { this.tweens.add({ targets: bellGfx, scale: 1.1, duration: 200 }); });
+    hit.on("pointerout", () => { this.tweens.add({ targets: bellGfx, scale: 1, duration: 200 }); });
     hit.on("pointerdown", () => {
       this.tweens.add({
         targets: bellGfx,
         angle: { from: -15, to: 15 },
-        duration: 100,
-        yoyo: true,
-        repeat: 2,
+        duration: 100, yoyo: true, repeat: 2,
       });
       audio.sfx("bell");
       vibrate(20);
       this.endTurn();
     });
 
-    // 8.9 Bouton Reroll (1× par combat) à gauche-bas
-    if (!this.rerollUsed) {
+    const rerollsLeft = this.rerollMaxUses - (this.rerollUsed ? 1 : 0);
+    if (rerollsLeft > 0) {
       const rerollC = this.add.container(60, GAME_HEIGHT - 40);
       const rBg = this.add.circle(0, 0, 22, 0x2a1810, 0.95);
       rBg.setStrokeStyle(2, 0x88a040);
       rerollC.add(rBg);
       rerollC.add(this.add.text(0, 0, "🔄", { fontSize: "18px" }).setOrigin(0.5));
-      rerollC.add(this.add.text(0, 32, "REROLL", {
-        fontFamily: "Georgia, serif",
-        fontSize: "8px",
-        color: "#88a040",
-        fontStyle: "italic",
+      rerollC.add(this.add.text(0, 32, `REROLL ${rerollsLeft}`, {
+        fontFamily: "Georgia, serif", fontSize: "8px", color: "#88a040", fontStyle: "italic",
       }).setOrigin(0.5));
       rBg.setInteractive({ useHandCursor: true });
       rBg.on("pointerdown", () => this.rerollHand());
@@ -650,13 +698,11 @@ export class CombatScene extends Phaser.Scene {
   }
 
   // ============================================================================
-  // Hand
+  // Hand render
   // ============================================================================
-
   private renderHand(): void {
     this.handContainer = this.add.container(0, 0);
 
-    // Background main
     const handBg = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT - 130, GAME_WIDTH - 20, 200, 0x000000, 0.5);
     handBg.setStrokeStyle(1, 0x8a5018, 0.6);
     this.handContainer.add(handBg);
@@ -679,7 +725,6 @@ export class CombatScene extends Phaser.Scene {
       c.setData("startY", handY);
       c.setData("handIdx", i);
 
-      // Ombre arrière
       const shadow = this.add.rectangle(2, 3, cardW, cardH, 0x000000, 0.5);
       c.add(shadow);
 
@@ -688,7 +733,13 @@ export class CombatScene extends Phaser.Scene {
       if (!playable) bg.setAlpha(0.4);
       c.add(bg);
 
-      // Halo radial pulsé derrière l'emoji
+      // A.8 — anomalie : effet visuel particulier
+      if (card.anomaly === "weeps") {
+        const tear = this.add.text(0, -cardH / 2 + 40, "💧", { fontSize: "10px" }).setOrigin(0.5);
+        c.add(tear);
+        this.tweens.add({ targets: tear, y: tear.y + 30, alpha: 0, duration: 1500, repeat: -1 });
+      }
+
       if (playable) {
         const halo = this.add.graphics();
         halo.fillStyle(palette.secondary, 0.4);
@@ -705,7 +756,6 @@ export class CombatScene extends Phaser.Scene {
         });
       }
 
-      // Ornements coins dorés
       const orn = this.add.graphics();
       orn.lineStyle(1, palette.accent, 0.7);
       [-1, 1].forEach((sx) => [-1, 1].forEach((sy) => {
@@ -716,19 +766,21 @@ export class CombatScene extends Phaser.Scene {
       }));
       c.add(orn);
 
-      // Coût (cercle haut-gauche)
       const costColor = playable ? palette.secondary : 0x666666;
       const costCircle = this.add.circle(-cardW / 2 + 13, -cardH / 2 + 13, 11, costColor);
       costCircle.setStrokeStyle(2, palette.accent);
       c.add(costCircle);
       c.add(this.add.text(-cardW / 2 + 13, -cardH / 2 + 13, String(card.cost), {
-        fontFamily: "monospace",
-        fontSize: "10px",
-        color: "#fff5dc",
-        fontStyle: "bold",
+        fontFamily: "monospace", fontSize: "10px", color: "#fff5dc", fontStyle: "bold",
       }).setOrigin(0.5));
 
-      // Emoji spécifique du monstre
+      // Niveau de carte (G.3)
+      if (card.cardLevel && card.cardLevel > 1) {
+        c.add(this.add.text(cardW / 2 - 13, -cardH / 2 + 13, "★".repeat(card.cardLevel - 1), {
+          fontSize: "9px", color: "#ffd870",
+        }).setOrigin(0.5));
+      }
+
       const emojiText = this.add.text(0, -cardH / 2 + 38, this.getCardEmoji(card.axis, card), {
         fontSize: "28px",
       }).setOrigin(0.5);
@@ -738,60 +790,47 @@ export class CombatScene extends Phaser.Scene {
           targets: emojiText,
           scale: { from: 1, to: 1.06 },
           duration: 1800 + Math.random() * 600,
-          yoyo: true,
-          repeat: -1,
+          yoyo: true, repeat: -1,
         });
       }
 
-      // Nom
-      c.add(this.add.text(0, cardH / 2 - 26, card.name, {
-        fontFamily: "Georgia, serif",
-        fontSize: "9px",
+      let nm = card.name;
+      if (card.consecrated) nm += "✨";
+      c.add(this.add.text(0, cardH / 2 - 26, nm, {
+        fontFamily: "Georgia, serif", fontSize: "9px",
         color: "#" + palette.accent.toString(16).padStart(6, "0"),
-        fontStyle: "bold",
-        align: "center",
-        wordWrap: { width: cardW - 6 },
+        fontStyle: "bold", align: "center", wordWrap: { width: cardW - 6 },
       }).setOrigin(0.5));
 
-      // ATK / HP
       c.add(this.add.text(-cardW / 2 + 8, cardH / 2 - 6, `⚔${card.atk}`, {
-        fontFamily: "monospace",
-        fontSize: "10px",
-        color: "#f08070",
-        fontStyle: "bold",
+        fontFamily: "monospace", fontSize: "10px", color: "#f08070", fontStyle: "bold",
       }).setOrigin(0, 1));
       c.add(this.add.text(cardW / 2 - 8, cardH / 2 - 6, `❤${card.hp}`, {
-        fontFamily: "monospace",
-        fontSize: "10px",
-        color: "#80c08f",
-        fontStyle: "bold",
+        fontFamily: "monospace", fontSize: "10px", color: "#80c08f", fontStyle: "bold",
       }).setOrigin(1, 1));
 
-      // 2.1 Sigils icons sur la carte en main
       const sigilIconsHand: Record<string, string> = {
         bleed: "🩸", shield: "🛡", swift: "⚡", vampire: "🦇",
+        counter: "🪤", chant: "🎶", morph: "🪬", guardian: "💎",
+        venom: "🧪", freeze: "❄", burn: "🔥",
       };
       if (card.sigils && card.sigils.length > 0) {
-        card.sigils.slice(0, 2).forEach((sig, idx) => {
+        card.sigils.slice(0, 3).forEach((sig, idx) => {
           c.add(this.add.text(cardW / 2 - 4 - idx * 12, -cardH / 2 + 4, sigilIconsHand[sig] || "✦", {
             fontSize: "10px",
           }).setOrigin(1, 0));
         });
       }
 
-      // Drag setup
       bg.setInteractive({ useHandCursor: true, draggable: playable });
       this.input.setDraggable(bg, playable);
 
-      // 1.3 Pulse subtle si jouable
       if (playable && !this.pendingSummon) {
         this.tweens.add({
           targets: c,
           scaleX: { from: 1, to: 1.04 },
           scaleY: { from: 1, to: 1.04 },
-          duration: 1500,
-          yoyo: true,
-          repeat: -1,
+          duration: 1500, yoyo: true, repeat: -1,
         });
       }
 
@@ -815,13 +854,10 @@ export class CombatScene extends Phaser.Scene {
         bg.setAlpha(0.7);
       });
 
-      // 6.2 Long-press preview = zoom carte en grand au centre
-      bg.on("pointerdown", (p: Phaser.Input.Pointer) => {
+      bg.on("pointerdown", () => {
         if (this.longPressTimer) clearTimeout(this.longPressTimer);
         this.longPressTimer = setTimeout(() => {
-          if (!c.getData("dragging")) {
-            this.showCardZoom(card);
-          }
+          if (!c.getData("dragging")) this.showCardZoom(card);
         }, 500);
       });
       bg.on("pointerup", () => {
@@ -837,7 +873,6 @@ export class CombatScene extends Phaser.Scene {
         (this as any).dragSourceIdx = null;
         bg.setAlpha(playable ? 1 : 0.4);
 
-        // Détecter zone joueur la plus proche
         const playerY = 460;
         const slotW = 90;
         const totalW = 4 * slotW + 3 * 8;
@@ -848,19 +883,14 @@ export class CombatScene extends Phaser.Scene {
           if (this.playerBoard[z].card) continue;
           const sx = playerStartX + z * (slotW + 8);
           const d = Phaser.Math.Distance.Between(c.x, c.y, sx, playerY);
-          if (d < closestDist) {
-            closestDist = d;
-            closest = z;
-          }
+          if (d < closestDist) { closestDist = d; closest = z; }
         }
         if (closest >= 0) {
           this.tryAttemptSummon(i, closest);
         } else {
-          // Retour à la main
           this.tweens.add({
             targets: c,
-            x: c.getData("startX"),
-            y: c.getData("startY"),
+            x: c.getData("startX"), y: c.getData("startY"),
             duration: 200,
           });
           this.renderBoard();
@@ -872,13 +902,11 @@ export class CombatScene extends Phaser.Scene {
   }
 
   // ============================================================================
-  // HUD : pool axes + boss HP
+  // HUD
   // ============================================================================
-
   private renderHud(): void {
     this.hudContainer = this.add.container(0, 0);
 
-    // Boss HP bar
     const bossBarY = 175;
     const barW = GAME_WIDTH - 180;
     const bossBarBg = this.add.rectangle(GAME_WIDTH / 2, bossBarY, barW, 14, 0x000000, 0.7);
@@ -889,24 +917,22 @@ export class CombatScene extends Phaser.Scene {
     const bossHp = boss?.currentHp ?? 0;
     const hpPct = Math.max(0, bossHp / this.bossMaxHp);
     const fillW = barW * hpPct;
+    const fillColor = this.bossPhase === 2 ? 0xff4040 : 0xc83838;
     this.bossHpFill = this.add.rectangle(
       GAME_WIDTH / 2 - barW / 2 + fillW / 2,
-      bossBarY,
-      fillW,
-      12,
-      0xc83838
+      bossBarY, fillW, 12, fillColor
     );
     this.hudContainer.add(this.bossHpFill);
-    const bossName = (this as any).bossName || "Boss";
-    this.bossHpText = this.add.text(GAME_WIDTH / 2, bossBarY, `${bossName}  ${bossHp}/${this.bossMaxHp}`, {
-      fontFamily: "monospace",
-      fontSize: "10px",
-      color: "#fff5dc",
-      fontStyle: "bold",
+    // Marker 50% phase 2
+    const halfX = GAME_WIDTH / 2 - barW / 2 + barW / 2;
+    const marker = this.add.rectangle(halfX, bossBarY, 2, 18, 0xffffff, 0.5);
+    this.hudContainer.add(marker);
+
+    this.bossHpText = this.add.text(GAME_WIDTH / 2, bossBarY, `${this.circleDef.bossName}  ${bossHp}/${this.bossMaxHp}`, {
+      fontFamily: "monospace", fontSize: "10px", color: "#fff5dc", fontStyle: "bold",
     }).setOrigin(0.5);
     this.hudContainer.add(this.bossHpText);
 
-    // Joueur HP bar (juste au-dessus de la main)
     const playerHpY = GAME_HEIGHT - 250;
     const pBarBg = this.add.rectangle(GAME_WIDTH / 2, playerHpY, barW, 16, 0x000000, 0.75);
     pBarBg.setStrokeStyle(2, 0x88c060);
@@ -915,21 +941,15 @@ export class CombatScene extends Phaser.Scene {
     const pFillW = barW * pPct;
     this.playerHpBar = this.add.rectangle(
       GAME_WIDTH / 2 - barW / 2 + pFillW / 2,
-      playerHpY,
-      pFillW,
-      14,
+      playerHpY, pFillW, 14,
       pPct > 0.5 ? 0x6ae060 : pPct > 0.25 ? 0xe8c040 : 0xe04040
     );
     this.hudContainer.add(this.playerHpBar);
     this.playerHpText = this.add.text(GAME_WIDTH / 2, playerHpY, `❤ Toi  ${this.playerHp}/${this.playerMaxHp}`, {
-      fontFamily: "monospace",
-      fontSize: "11px",
-      color: "#fff5dc",
-      fontStyle: "bold",
+      fontFamily: "monospace", fontSize: "11px", color: "#fff5dc", fontStyle: "bold",
     }).setOrigin(0.5);
     this.hudContainer.add(this.playerHpText);
 
-    // Pool d'âme (top 4 axes)
     const top = (Object.entries(this.axisPool) as [Axis, number][])
       .sort((a, b) => b[1] - a[1])
       .slice(0, 4);
@@ -944,9 +964,7 @@ export class CombatScene extends Phaser.Scene {
     this.hudContainer.add(bg2);
 
     this.hudContainer.add(this.add.text(px + 6, py + 4, "ÂME", {
-      fontFamily: "monospace",
-      fontSize: "9px",
-      color: "#d4a040",
+      fontFamily: "monospace", fontSize: "9px", color: "#d4a040",
     }));
 
     top.forEach((entry, i) => {
@@ -955,25 +973,26 @@ export class CombatScene extends Phaser.Scene {
       const yo = py + 16 + i * 11;
       this.hudContainer?.add(this.add.circle(px + 8, yo + 4, 3, palette.secondary));
       this.hudContainer?.add(this.add.text(px + 14, yo, `${axis} ${val}`, {
-        fontFamily: "monospace",
-        fontSize: "8px",
+        fontFamily: "monospace", fontSize: "8px",
         color: "#" + palette.accent.toString(16).padStart(6, "0"),
       }));
     });
+
+    // D.5 — appease stacks
+    if (this.bossSpecials.includes("appeasable") && this.bossPhase === 1 && this.appeaseStacks > 0) {
+      this.hudContainer.add(this.add.text(8, 200, `🕊 Apaisement: ${this.appeaseStacks}/3`, {
+        fontFamily: "monospace", fontSize: "10px", color: "#88e0a0",
+      }));
+    }
   }
 
   // ============================================================================
-  // Logique
+  // Logic
   // ============================================================================
-
   private setJudgeMessage(msg: string): void {
     if (this.judgeBubble) {
       this.judgeBubble.setText(msg);
-      this.tweens.add({
-        targets: this.judgeBubble,
-        alpha: { from: 0.3, to: 1 },
-        duration: 400,
-      });
+      this.tweens.add({ targets: this.judgeBubble, alpha: { from: 0.3, to: 1 }, duration: 400 });
     }
   }
 
@@ -998,21 +1017,40 @@ export class CombatScene extends Phaser.Scene {
   }
 
   private drawHand(n: number): void {
+    let drawn = 0;
     for (let i = 0; i < n; i++) {
-      if (this.hand.length >= HAND_LIMIT) break; // 2.9 limite main
+      if (this.hand.length >= HAND_LIMIT) break;
       if (this.deck.length === 0) {
         if (this.discard.length === 0) break;
         this.deck = this.shuffle(this.discard);
         this.discard = [];
       }
       const c = this.deck.pop();
-      if (c) this.hand.push(c);
+      if (c) {
+        this.hand.push(c);
+        drawn++;
+      }
     }
-    audio.sfx("draw");
+    if (drawn > 0) audio.sfx("draw");
   }
 
-  // Tente une invocation : si le joueur a assez de points, pose direct.
-  // Sinon, propose le sacrifice : "il faut sacrifier un de tes monstres pour invoquer"
+  // B.1 — applique dégâts avec gestion bloc/vulnérable/faiblesse/force
+  private applyDamage(target: any, attacker: any, baseDmg: number): { dealt: number; blocked: number } {
+    let dmg = baseDmg;
+    if ((attacker?.weak || 0) > 0) dmg = Math.round(dmg * 0.75);
+    if ((attacker?.strong || 0) > 0) dmg = Math.round(dmg * 1.25);
+    if ((target.vulnerable || 0) > 0) dmg = Math.round(dmg * 1.5);
+
+    const blockAbsorbed = Math.min(dmg, target.block || 0);
+    if (target.block) target.block -= blockAbsorbed;
+    const finalDmg = dmg - blockAbsorbed;
+    target.currentHp -= finalDmg;
+    return { dealt: finalDmg, blocked: blockAbsorbed };
+  }
+
+  // ============================================================================
+  // Summon
+  // ============================================================================
   private tryAttemptSummon(handIdx: number, zoneIdx: number): void {
     const card = this.hand[handIdx];
     if (!card) return;
@@ -1026,23 +1064,17 @@ export class CombatScene extends Phaser.Scene {
     const available = this.axisPool[axis] || 0;
 
     if (available >= cost) {
-      // Direct summon, pas de sacrifice
       this.directSummon(handIdx, zoneIdx);
       return;
     }
 
-    // Pas assez : peut-être qu'un sacrifice de monstre déjà sur le board peut compenser
     const playerMonsters = this.playerBoard.filter((s) => s.card && !s.card.isBoss).length;
     if (playerMonsters > 0) {
-      // Mode sacrifice : on demande au joueur de cliquer un de ses monstres pour le sacrifier
       this.pendingSummon = { handIdx, targetZone: zoneIdx };
       this.setJudgeMessage(`Pas assez de ${axis}. Sacrifie un de tes monstres pour combler.`);
-      // Re-render pour highlight
       this.renderScene();
     } else {
-      // Vraiment pas possible
       this.setJudgeMessage(`Tu n'as pas assez de ${axis} (${available}/${cost}).`);
-      // Animation de retour
       this.renderHand();
     }
   }
@@ -1052,17 +1084,20 @@ export class CombatScene extends Phaser.Scene {
     const axis = card.axis;
     this.axisPool[axis] = (this.axisPool[axis] || 0) - card.cost;
 
-    // 2.1 Sigil "swift" : pas de summoning sickness
-    const swift = (card.sigils || []).includes("swift");
-    // 2.1 Sigil "shield" : +2 bloc au tour de pose
-    const shieldBlock = (card.sigils || []).includes("shield") ? 2 : 0;
+    const sigils = card.sigils || [];
+    const swift = sigils.includes("swift");
+    const shieldBlock = sigils.includes("shield") ? 2 : 0;
+    const facedown = sigils.includes("counter");
 
     this.playerBoard[zoneIdx] = {
       card: {
         ...card,
         currentHp: card.hp,
+        maxHpAtPlay: card.hp,
         sickness: !swift,
         block: shieldBlock,
+        chantReady: sigils.includes("chant"),
+        facedown,
       },
     };
     this.hand.splice(handIdx, 1);
@@ -1071,7 +1106,22 @@ export class CombatScene extends Phaser.Scene {
     audio.sfx("card_play");
     this.setJudgeMessage(pickLine("cardSummoned"));
 
-    // Particules dorées sur la zone d'invocation
+    // I.1 — registre cumul + boost permanent
+    registerCardPlay(card);
+    // A.4 — profil évolutif : axe de la carte +1 transitoire
+    applyAxisShift(card.axis, 1);
+    this.cardsPlayedThisCombat.push(card.id);
+
+    // D.5 — appeasable boss : Charité l'apaise
+    if (this.bossSpecials.includes("appeasable") && card.axis === "Charite" && this.bossPhase === 1) {
+      this.appeaseStacks = Math.min(3, this.appeaseStacks + 1);
+      if (this.appeaseStacks >= 3) {
+        const boss = this.enemyBoard.find((s) => s.card?.isBoss)?.card;
+        if (boss) boss.atk = Math.max(1, boss.atk - 2);
+        this.setJudgeMessage(`${this.circleDef.bossName} s'apaise. Ses dégâts diminuent.`);
+      }
+    }
+
     const playerY = 460;
     const slotW = 90;
     const totalW = 4 * slotW + 3 * 8;
@@ -1086,13 +1136,16 @@ export class CombatScene extends Phaser.Scene {
     if (!this.pendingSummon) return;
     const sacrificed = this.playerBoard[sacrificeZoneIdx].card;
     if (!sacrificed || sacrificed.isBoss) return;
+    // G.5 gardienne ne peut être sacrifiée
+    if ((sacrificed.sigils || []).includes("guardian")) {
+      this.setJudgeMessage("La carte gardienne refuse d'être sacrifiée.");
+      return;
+    }
     this.cardsSacrificed++;
 
-    // Le sacrifice rend X points d'axe (les points qu'avait coûté la carte sacrifiée)
     const refund = sacrificed.cost;
     this.axisPool[sacrificed.axis] = (this.axisPool[sacrificed.axis] || 0) + refund;
 
-    // Effet visuel sang sur le sacrifice
     const playerY = 460;
     const slotW = 90;
     const totalW = 4 * slotW + 3 * 8;
@@ -1102,27 +1155,49 @@ export class CombatScene extends Phaser.Scene {
     audio.sfx("card_destroy");
     this.cameraShake(0.005, 200);
 
-    // Retire le monstre sacrifié
-    this.discard.push(sacrificed);
+    // A.9 — pacted return ? La carte sacrifiée reviendra plus tard avec +ATK
+    if (Math.random() < 0.2) {
+      const pacted = { ...sacrificed, pactedReturn: true, pactedAtkBonus: 2 };
+      // Stockée pour invocation auto plus tard
+      (this as any).pactedCards = (this as any).pactedCards || [];
+      (this as any).pactedCards.push(pacted);
+      this.setJudgeMessage("Cette carte garde rancune. Elle reviendra.");
+    }
+
+    // B.3 — sigil morph : transformation à la mort
+    if ((sacrificed.sigils || []).includes("morph")) {
+      const newCard: Card = {
+        ...sacrificed,
+        id: sacrificed.id + "-morph",
+        name: `Spectre de ${sacrificed.name}`,
+        atk: Math.max(1, sacrificed.atk - 1),
+        hp: Math.max(1, sacrificed.hp - 1),
+        sigils: ["swift"] as Sigil[],
+        emoji: "👻",
+      };
+      this.discard.push(newCard);
+    } else {
+      this.discard.push(sacrificed);
+    }
     this.playerBoard[sacrificeZoneIdx] = { card: null };
 
     this.setJudgeMessage(pickLine("sacrifice"));
 
-    // Réessaie le summon
     const { handIdx, targetZone } = this.pendingSummon;
     this.pendingSummon = null;
 
-    // Vérif maintenant
     const card = this.hand[handIdx];
     if (card && this.axisPool[card.axis] >= card.cost) {
       this.directSummon(handIdx, targetZone);
     } else {
       this.setJudgeMessage("Encore. Sacrifie davantage.");
-      // Reset pendingSummon mais le joueur peut redrag la carte
       this.renderScene();
     }
   }
 
+  // ============================================================================
+  // Turn flow
+  // ============================================================================
   private endTurn(): void {
     if (this.isAnimating) return;
     if (this.pendingSummon) {
@@ -1132,7 +1207,40 @@ export class CombatScene extends Phaser.Scene {
     this.isAnimating = true;
     this.setJudgeMessage("Voyons ce que tes morts feront pour toi.");
 
+    // B.10 — événement aléatoire 5%
+    if (Math.random() < 0.08) this.triggerRandomEvent();
+
     this.time.delayedCall(700, () => this.battlePhase());
+  }
+
+  // B.10 — événement aléatoire en combat
+  private triggerRandomEvent(): void {
+    const evt = RANDOM_EVENTS[Math.floor(Math.random() * RANDOM_EVENTS.length)];
+    this.setJudgeMessage(`✦ ${evt.msg}`);
+    switch (evt.effect) {
+      case "buff_atk": {
+        const live = this.playerBoard.filter((s) => s.card && !s.card.isBoss);
+        if (live.length > 0) {
+          const target = live[Math.floor(Math.random() * live.length)];
+          if (target.card) target.card.atk++;
+        }
+        break;
+      }
+      case "buff_hp": {
+        const live = this.playerBoard.filter((s) => s.card && !s.card.isBoss);
+        if (live.length > 0) {
+          const target = live[Math.floor(Math.random() * live.length)];
+          if (target.card) target.card.currentHp++;
+        }
+        break;
+      }
+      case "draw_extra":
+        this.drawHand(1);
+        break;
+      case "boss_skip":
+        (this as any).bossSkipNextTurn = true;
+        break;
+    }
   }
 
   private battlePhase(): void {
@@ -1142,74 +1250,115 @@ export class CombatScene extends Phaser.Scene {
     const totalW = 4 * slotW + 3 * 8;
     const startX = (GAME_WIDTH - totalW) / 2 + slotW / 2;
 
-    // Iterate avec setTimeout entre chaque pour anim
     let i = 0;
     const next = () => {
       if (i >= 4) {
-        // Reset summoning sickness joueur
         this.playerBoard.forEach((s) => {
           if (s.card) s.card.sickness = false;
         });
-        // Vérif boss mort
         if (bossDestroyed) {
           this.endCombat("victory");
           return;
         }
-        // Tour ennemi
         this.time.delayedCall(500, () => this.enemyTurn());
         return;
       }
 
       const myMon = this.playerBoard[i].card;
-      if (!myMon || myMon.sickness) {
+      if (!myMon || myMon.sickness || (myMon.frozen || 0) > 0) {
+        if (myMon && (myMon.frozen || 0) > 0) myMon.frozen!--;
         i++;
         next();
         return;
       }
+
+      // B.4 — initiative & zone-vs-zone : attaque la zone i ennemie
       const enemy = this.enemyBoard[i].card;
       if (enemy) {
-        // Calcul dégâts avec bloc + vulnérable (statuts 2.2)
-        let dmg = myMon.atk;
-        if ((enemy.vulnerable || 0) > 0) dmg = Math.round(dmg * 1.5);
-        const blockAbsorbed = Math.min(dmg, enemy.block || 0);
-        if (enemy.block) enemy.block -= blockAbsorbed;
-        const finalDmg = dmg - blockAbsorbed;
-        enemy.currentHp -= finalDmg;
-        // Sigil bleed -> applique Saignement
-        if ((myMon.sigils || []).includes("bleed")) {
-          enemy.bleeding = (enemy.bleeding || 0) + 2;
+        // B.6 — initiative : si attaquant ATK > défenseur ATK, frappe d'abord
+        const attackerFirst = myMon.atk >= (enemy.atk || 0);
+        const myDmg = myMon.atk;
+        const enDmg = enemy.atk || 0;
+
+        const myMonAfter = { ...myMon };
+        const enemyAfter = { ...enemy };
+
+        if (attackerFirst) {
+          this.applyDamage(enemy, myMon, myDmg);
+          if ((myMon.sigils || []).includes("bleed")) enemy.bleeding = (enemy.bleeding || 0) + 2;
+          if ((myMon.sigils || []).includes("venom")) enemy.poisoned = (enemy.poisoned || 0) + 1;
+          if ((myMon.sigils || []).includes("freeze")) enemy.frozen = (enemy.frozen || 0) + 1;
+          if ((myMon.sigils || []).includes("vampire")) {
+            myMon.currentHp = Math.min(myMon.hp, myMon.currentHp + 1);
+          }
+          if (enemy.currentHp > 0) {
+            // Riposte
+            this.applyDamage(myMon, enemy, enDmg);
+            if ((enemy.sigils || []).includes("burn") && (myMon.flammable || 0) > 0) {
+              myMon.currentHp -= 2;
+            }
+          }
+        } else {
+          this.applyDamage(myMon, enemy, enDmg);
+          if (myMon.currentHp > 0) {
+            this.applyDamage(enemy, myMon, myDmg);
+          }
         }
-        // Sigil vampire -> heal myMon
-        if ((myMon.sigils || []).includes("vampire") && finalDmg > 0) {
-          myMon.currentHp = Math.min(myMon.hp, myMon.currentHp + Math.ceil(finalDmg / 2));
-        }
+
         const ex = startX + i * (slotW + 8);
         const ey = 230;
         this.spawnBlood(ex, ey, 12);
         this.cameraShake(0.004, 150);
         audio.sfx("damage");
-        this.flashFlying(`-${finalDmg}${blockAbsorbed > 0 ? ` (${blockAbsorbed} bloqué)` : ""}`, ex, ey, "#f08070");
+        this.flashFlying(`-${myDmg}`, ex, ey, "#f08070");
         if (Math.random() < 0.4) this.setJudgeMessage(pickLine("damage"));
+
         if (enemy.currentHp <= 0) {
           this.enemyBoard[i].card = null;
           if (enemy.isBoss) bossDestroyed = true;
         }
+        if (myMon.currentHp <= 0) {
+          // B.3 morph à la mort
+          if ((myMon.sigils || []).includes("morph")) {
+            this.playerBoard[i].card = {
+              ...myMon, name: `Spectre de ${myMon.name}`,
+              atk: Math.max(1, myMon.atk - 1), hp: 2, currentHp: 2,
+              sigils: ["swift"], emoji: "👻", maxHpAtPlay: 2,
+            } as any;
+          } else {
+            this.playerBoard[i].card = null;
+          }
+        }
       } else {
-        // Direct sur le boss
+        // Direct sur boss
         const bossZone = this.enemyBoard.findIndex((s) => s.card?.isBoss);
         if (bossZone !== -1 && this.enemyBoard[bossZone].card) {
           const boss = this.enemyBoard[bossZone].card!;
-          boss.currentHp -= myMon.atk;
+          const r = this.applyDamage(boss, myMon, myMon.atk);
           this.spawnBlood(GAME_WIDTH / 2, 175, 15);
           this.cameraShake(0.006, 200);
           audio.sfx("damage");
-          this.flashFlying(`-${myMon.atk}`, GAME_WIDTH / 2, 195, "#f08070");
+          this.flashFlying(`-${r.dealt}`, GAME_WIDTH / 2, 195, "#f08070");
+
+          if ((myMon.sigils || []).includes("vampire") && r.dealt > 0) {
+            myMon.currentHp = Math.min(myMon.hp, myMon.currentHp + Math.ceil(r.dealt / 2));
+          }
+          if ((myMon.sigils || []).includes("bleed")) boss.bleeding = (boss.bleeding || 0) + 2;
+          if ((myMon.sigils || []).includes("venom")) boss.poisoned = (boss.poisoned || 0) + 2;
+
+          // B.9 — vérifier déclenchement phase 2
+          if (this.bossPhase === 1 && boss.currentHp > 0 && boss.currentHp <= this.bossMaxHp / 2) {
+            this.enterBossPhase2();
+          }
           if (boss.currentHp <= 0) {
             bossDestroyed = true;
             this.enemyBoard[bossZone].card = null;
           }
         }
       }
+
+      // B.2 — synergie de zone : si 3 cartes du même axe sur le board → +1 ATK toutes
+      this.applyZoneSynergies();
 
       this.renderScene();
       i++;
@@ -1218,11 +1367,55 @@ export class CombatScene extends Phaser.Scene {
     next();
   }
 
+  // B.2 — synergies de zone
+  private applyZoneSynergies(): void {
+    const axisCount: Record<string, number> = {};
+    this.playerBoard.forEach((s) => {
+      if (s.card && !s.card.isBoss) {
+        axisCount[s.card.axis] = (axisCount[s.card.axis] || 0) + 1;
+      }
+    });
+    Object.entries(axisCount).forEach(([axis, count]) => {
+      if (count >= 3) {
+        this.playerBoard.forEach((s) => {
+          if (s.card && s.card.axis === axis && !s.card.isBoss && !(s.card as any).synergyBuffed) {
+            s.card.atk++;
+            (s.card as any).synergyBuffed = true;
+          }
+        });
+      }
+    });
+  }
+
+  // B.9 — phase 2 boss à 50% HP
+  private enterBossPhase2(): void {
+    if (this.bossPhase === 2) return;
+    this.bossPhase = 2;
+    const boss = this.enemyBoard.find((s) => s.card?.isBoss)?.card;
+    if (!boss) return;
+    boss.bossPhase = 2;
+    this.cameraShake(0.015, 600);
+    audio.sfx("bell");
+    vibrate([60, 30, 60]);
+
+    if (this.bossSpecials.includes("phase_2_rage")) {
+      boss.atk = Math.round(boss.atk * 1.5);
+      this.setJudgeMessage(`${this.circleDef.bossName} entre en rage. ${this.circleDef.phase2Rule}`);
+    }
+    if (this.bossSpecials.includes("phase_2_heal")) {
+      boss.currentHp = Math.min(boss.maxHpAtPlay || boss.hp, boss.currentHp + 8);
+      this.setJudgeMessage(`${this.circleDef.bossName} se régénère. ${this.circleDef.phase2Rule}`);
+    }
+    if (this.bossSpecials.includes("phase_2_swap")) {
+      this.setJudgeMessage(`${this.circleDef.bossName} change de règles. ${this.circleDef.phase2Rule}`);
+    }
+  }
+
   private enemyTurn(): void {
     this.setJudgeMessage(pickLine("endTurn"));
     audio.sfx("click");
 
-    // Tick saignement sur ennemis (status actif 2.2)
+    // Tick statuts ennemis
     this.enemyBoard.forEach((slot, i) => {
       const e = slot.card;
       if (!e) return;
@@ -1234,22 +1427,117 @@ export class CombatScene extends Phaser.Scene {
         const startX = (GAME_WIDTH - totalW) / 2 + slotW / 2;
         this.flashFlying(`🩸 -1`, startX + i * (slotW + 8), 230, "#ff6060");
         if (e.currentHp <= 0) {
-          if (e.isBoss) {
-            // Boss tombe par saignement -> victoire
-            this.endCombat("victory");
-            return;
-          }
+          if (e.isBoss) { this.endCombat("victory"); return; }
+          this.enemyBoard[i].card = null;
+        }
+      }
+      if ((e.poisoned || 0) > 0) {
+        e.currentHp -= e.poisoned!;
+        const slotW = 90;
+        const totalW = 4 * slotW + 3 * 8;
+        const startX = (GAME_WIDTH - totalW) / 2 + slotW / 2;
+        this.flashFlying(`🧪 -${e.poisoned}`, startX + i * (slotW + 8), 230, "#80f080");
+        if (e.currentHp <= 0) {
+          if (e.isBoss) { this.endCombat("victory"); return; }
           this.enemyBoard[i].card = null;
         }
       }
     });
 
+    // D.2 — Cerbère détruit 1 case par tour
+    if (this.bossSpecials.includes("destroy_board_slot")) {
+      const candidates = this.playerBoard
+        .map((s, i) => ({ s, i }))
+        .filter((x) => x.s.card && !x.s.card.isBoss && !(x.s.card.sigils || []).includes("guardian"));
+      const destroyCount = this.bossPhase === 2 ? 2 : 1;
+      for (let n = 0; n < destroyCount && candidates.length > 0; n++) {
+        const target = candidates.splice(Math.floor(Math.random() * candidates.length), 1)[0];
+        this.discard.push(target.s.card!);
+        this.playerBoard[target.i] = { card: null };
+        this.spawnBlood(0, 460, 20);
+        this.flashFlying("DÉVORÉ", GAME_WIDTH / 2, 460, "#ff6060");
+      }
+    }
+
+    // D.4 — Acédie efface l'axe le plus fort
+    if (this.bossSpecials.includes("drain_top_axis")) {
+      const sorted = (Object.entries(this.axisPool) as [Axis, number][]).sort((a, b) => b[1] - a[1]);
+      if (sorted.length > 0) {
+        const [topAxis] = sorted[0];
+        const drain = this.bossPhase === 2 ? 8 : 5;
+        if (this.bossPhase === 2) {
+          // Drain sur tous
+          Object.keys(this.axisPool).forEach((a) => {
+            this.axisPool[a as Axis] = Math.max(0, this.axisPool[a as Axis] - 3);
+          });
+        } else {
+          this.axisPool[topAxis] = Math.max(0, this.axisPool[topAxis] - drain);
+        }
+        this.flashFlying(`-${drain} ${topAxis}`, 50, 200, "#a08080");
+      }
+    }
+
+    // Sœurs d'Envie : copient ta carte la plus puissante
+    if (this.bossSpecials.includes("copy_strongest")) {
+      const sorted = this.playerBoard
+        .filter((s) => s.card && !s.card.isBoss)
+        .sort((a, b) => (b.card!.atk - a.card!.atk));
+      if (sorted.length > 0 && sorted[0].card) {
+        const proto = sorted[0].card!;
+        const free = this.enemyBoard.findIndex((s) => !s.card);
+        if (free >= 0) {
+          this.enemyBoard[free] = {
+            card: {
+              ...proto, id: proto.id + "-copy", isBoss: false,
+              currentHp: proto.hp, name: "Copie",
+            } as any,
+          };
+          this.flashFlying("COPIE", 230, 230, "#a0c0e0");
+        }
+      }
+    }
+
+    // B.8 — invoque minions
+    if (this.bossSpecials.includes("summon_minions") && this.turn % 3 === 0) {
+      const free = this.enemyBoard.findIndex((s) => !s.card);
+      if (free >= 0) {
+        const minion: Card = {
+          id: "minion", name: "Larve", axis: this.bossAxis,
+          cost: 0, atk: 2, hp: 3, emoji: "🦗",
+        };
+        this.enemyBoard[free] = { card: { ...minion, currentHp: 3 } as any };
+      }
+    }
+
+    // Boss skip de l'event aléatoire ?
+    if ((this as any).bossSkipNextTurn) {
+      (this as any).bossSkipNextTurn = false;
+      this.setJudgeMessage("Le boss saute son attaque.");
+      this.time.delayedCall(800, () => {
+        this.turn++;
+        this.drawHand(2);
+        this.isAnimating = false;
+        this.renderScene();
+      });
+      return;
+    }
+
     let i = 0;
     const next = () => {
       if (i >= 4) {
-        // Pioche fin de tour
         this.turn++;
-        this.drawHand(2);
+        // Pioche ajustée par cercle Paresse
+        let drawN = 2;
+        if (this.bossAxis === "Paresse") drawN--;
+        this.drawHand(Math.max(1, drawN));
+
+        // B.7 — chant : libère cartes prêtes
+        this.playerBoard.forEach((s) => {
+          if (s.card && (s.card.sigils || []).includes("chant") && s.card.chantReady && s.card.currentHp > 0) {
+            // Pas de cost ce tour
+            (s.card as any).cost = 0;
+          }
+        });
 
         const total = (Object.values(this.axisPool) as number[]).reduce((s, v) => s + v, 0);
         if (this.playerHp <= 0 || total < 5) {
@@ -1262,7 +1550,8 @@ export class CombatScene extends Phaser.Scene {
       }
 
       const enemy = this.enemyBoard[i].card;
-      if (!enemy) {
+      if (!enemy || (enemy.frozen || 0) > 0) {
+        if (enemy && (enemy.frozen || 0) > 0) enemy.frozen!--;
         i++;
         next();
         return;
@@ -1273,27 +1562,41 @@ export class CombatScene extends Phaser.Scene {
       const playerStartX = (GAME_WIDTH - totalW) / 2 + slotW / 2;
       const px = playerStartX + i * (slotW + 8);
 
-      if (myMon) {
-        myMon.currentHp -= enemy.atk;
-        this.spawnBlood(px, 460, 12);
-        this.cameraShake(0.004, 150);
-        audio.sfx("damage");
-        this.flashFlying(`-${enemy.atk}`, px, 460, "#e08080");
-        if (myMon.currentHp <= 0) {
-          this.playerBoard[i].card = null;
-        }
-      } else {
-        // Attaque directe sur HP du joueur
-        this.playerHp = Math.max(0, this.playerHp - enemy.atk);
-        this.cameraShake(0.01, 300);
-        audio.sfx("damage");
-        vibrate([40, 20, 40]);
-        this.flashFlying(`-${enemy.atk} HP`, GAME_WIDTH / 2, 700, "#ff5050");
-        if (Math.random() < 0.5) this.setJudgeMessage(pickLine("enemyAttack"));
-        this.refreshPlayerHpBar();
-        if (this.playerHp <= 0) {
-          this.endCombat("defeat");
-          return;
+      let attackCount = 1;
+      if (enemy.isBoss && this.bossPhase === 2 && this.bossSpecials.includes("phase_2_rage")) {
+        attackCount = 2;  // Cléopâtre frappe deux fois
+      }
+
+      for (let atk = 0; atk < attackCount; atk++) {
+        if (myMon && myMon.currentHp > 0) {
+          // B.5 — counter révélation
+          if (myMon.facedown) {
+            myMon.facedown = false;
+            // counter revele : double sa propre ATK ce tour
+            myMon.atk *= 2;
+            this.flashFlying("EMBUSCADE!", px, 460, "#ffd870");
+          }
+          const r = this.applyDamage(myMon, enemy, enemy.atk);
+          this.spawnBlood(px, 460, 12);
+          this.cameraShake(0.004, 150);
+          audio.sfx("damage");
+          this.flashFlying(`-${r.dealt}`, px, 460, "#e08080");
+          if ((enemy.sigils || []).includes("burn") && (myMon.flammable || 0) > 0) {
+            myMon.currentHp -= 2;
+          }
+          if (myMon.currentHp <= 0) {
+            this.playerBoard[i].card = null;
+          }
+        } else {
+          // Attaque directe
+          this.playerHp = Math.max(0, this.playerHp - enemy.atk);
+          this.cameraShake(0.01, 300);
+          audio.sfx("damage");
+          vibrate([40, 20, 40]);
+          this.flashFlying(`-${enemy.atk} HP`, GAME_WIDTH / 2, 700, "#ff5050");
+          if (Math.random() < 0.5) this.setJudgeMessage(pickLine("enemyAttack"));
+          this.refreshPlayerHpBar();
+          if (this.playerHp <= 0) { this.endCombat("defeat"); return; }
         }
       }
 
@@ -1305,11 +1608,9 @@ export class CombatScene extends Phaser.Scene {
   }
 
   private refreshPlayerHpBar(): void {
-    // re-render hud pour repartir frais
     this.renderHud();
   }
 
-  // 1.7 Zoom carte au long-press
   private showCardZoom(card: Card): void {
     if (this.cardZoomOverlay) this.cardZoomOverlay.destroy();
     this.cardZoomOverlay = this.add.container(0, 0);
@@ -1333,7 +1634,6 @@ export class CombatScene extends Phaser.Scene {
     cardBg.setStrokeStyle(5, palette.secondary);
     this.cardZoomOverlay.add(cardBg);
 
-    // Coût
     const costCircle = this.add.circle(cx - cardW / 2 + 35, cy - cardH / 2 + 35, 28, palette.secondary);
     costCircle.setStrokeStyle(4, palette.accent);
     this.cardZoomOverlay.add(costCircle);
@@ -1341,7 +1641,6 @@ export class CombatScene extends Phaser.Scene {
       fontFamily: "monospace", fontSize: "26px", color: "#fff5dc", fontStyle: "bold",
     }).setOrigin(0.5));
 
-    // Halo derrière l'emoji
     const halo = this.add.graphics();
     halo.fillStyle(palette.secondary, 0.4);
     halo.fillCircle(cx, cy - 60, 80);
@@ -1349,27 +1648,14 @@ export class CombatScene extends Phaser.Scene {
     halo.fillCircle(cx, cy - 60, 50);
     this.cardZoomOverlay.add(halo);
     this.tweens.add({
-      targets: halo,
-      alpha: { from: 0.7, to: 1.0 },
-      duration: 1400,
-      yoyo: true,
-      repeat: -1,
+      targets: halo, alpha: { from: 0.7, to: 1.0 },
+      duration: 1400, yoyo: true, repeat: -1,
     });
 
-    // Emoji spécifique
-    const zoomEmoji = this.add.text(cx, cy - 60, this.getCardEmoji(card.axis, card), {
-      fontSize: "100px",
-    }).setOrigin(0.5);
+    const zoomEmoji = this.add.text(cx, cy - 60, this.getCardEmoji(card.axis, card), { fontSize: "100px" }).setOrigin(0.5);
     this.cardZoomOverlay.add(zoomEmoji);
-    this.tweens.add({
-      targets: zoomEmoji,
-      scale: { from: 1, to: 1.08 },
-      duration: 1700,
-      yoyo: true,
-      repeat: -1,
-    });
+    this.tweens.add({ targets: zoomEmoji, scale: { from: 1, to: 1.08 }, duration: 1700, yoyo: true, repeat: -1 });
 
-    // Flavor text si présent
     if (card.flavor) {
       this.cardZoomOverlay.add(this.add.text(cx, cy + 20, `« ${card.flavor} »`, {
         fontFamily: "Georgia, serif", fontSize: "11px",
@@ -1378,14 +1664,12 @@ export class CombatScene extends Phaser.Scene {
       }).setOrigin(0.5));
     }
 
-    // Nom
     this.cardZoomOverlay.add(this.add.text(cx, cy + 40, card.name, {
       fontFamily: "Georgia, serif", fontSize: "26px",
       color: "#" + palette.accent.toString(16).padStart(6, "0"),
       fontStyle: "bold", align: "center",
     }).setOrigin(0.5));
 
-    // Effect text
     if (card.effect) {
       this.cardZoomOverlay.add(this.add.text(cx, cy + 80, card.effect, {
         fontFamily: "Georgia, serif", fontSize: "13px",
@@ -1393,15 +1677,31 @@ export class CombatScene extends Phaser.Scene {
       }).setOrigin(0.5));
     }
 
-    // Sigils détaillés
+    if (card.anomalyMessage) {
+      this.cardZoomOverlay.add(this.add.text(cx, cy + 100, `⚠ ${card.anomalyMessage}`, {
+        fontFamily: "Georgia, serif", fontSize: "10px",
+        color: "#ff8080", fontStyle: "italic",
+        align: "center", wordWrap: { width: cardW - 40 },
+      }).setOrigin(0.5));
+    }
+
     if (card.sigils && card.sigils.length > 0) {
-      let sy = cy + 120;
+      let sy = cy + 130;
+      const labels: Record<string, { icon: string; desc: string }> = {
+        bleed:    { icon: "🩸", desc: "Saignement (1 dmg/tour)" },
+        shield:   { icon: "🛡", desc: "+2 bloc tour de pose" },
+        swift:    { icon: "⚡", desc: "Attaque tour de pose" },
+        vampire:  { icon: "🦇", desc: "Vol de vie" },
+        counter:  { icon: "🪤", desc: "Embuscade" },
+        chant:    { icon: "🎶", desc: "Cantique : rejouable" },
+        morph:    { icon: "🪬", desc: "Mue à la mort" },
+        guardian: { icon: "💎", desc: "Indestructible" },
+        venom:    { icon: "🧪", desc: "Toxique" },
+        freeze:   { icon: "❄", desc: "Glace l'ennemi" },
+        burn:     { icon: "🔥", desc: "Brûlure" },
+      };
       card.sigils.forEach((sig) => {
-        const meta = (window as any).SIGIL_LABELS_INLINE?.[sig] ||
-          { bleed: { icon: "🩸", desc: "Inflige Saignement (1 dmg/tour) à l'attaqué." },
-            shield: { icon: "🛡", desc: "+2 bloc au tour de pose." },
-            swift: { icon: "⚡", desc: "Peut attaquer le tour de pose." },
-            vampire: { icon: "🦇", desc: "Vol de vie : récupère HP par dégât infligé." } }[sig];
+        const meta = labels[sig];
         if (!meta) return;
         this.cardZoomOverlay?.add(this.add.text(cx - cardW / 2 + 20, sy, `${meta.icon} ${meta.desc}`, {
           fontFamily: "Georgia, serif", fontSize: "11px",
@@ -1411,7 +1711,6 @@ export class CombatScene extends Phaser.Scene {
       });
     }
 
-    // ATK / HP en bas
     this.cardZoomOverlay.add(this.add.text(cx - cardW / 2 + 20, cy + cardH / 2 - 30, `⚔ ${card.atk}`, {
       fontFamily: "monospace", fontSize: "22px", color: "#f08070", fontStyle: "bold",
     }));
@@ -1419,32 +1718,24 @@ export class CombatScene extends Phaser.Scene {
       fontFamily: "monospace", fontSize: "22px", color: "#80c08f", fontStyle: "bold",
     }).setOrigin(1, 0));
 
-    // Hint fermer
     this.cardZoomOverlay.add(this.add.text(cx, cy + cardH / 2 + 30, "Touche pour fermer", {
       fontFamily: "Georgia, serif", fontSize: "11px", color: "#a87a3a", fontStyle: "italic",
     }).setOrigin(0.5));
 
-    // Anim entrée
     this.cardZoomOverlay.setScale(0);
     this.tweens.add({ targets: this.cardZoomOverlay, scale: 1, duration: 200, ease: "Back.easeOut" });
   }
 
   private flashFlying(text: string, x: number, y: number, color: string): void {
     const t = this.add.text(x, y, text, {
-      fontFamily: "monospace",
-      fontSize: "20px",
-      color,
-      stroke: "#000000",
-      strokeThickness: 3,
-      fontStyle: "bold",
+      fontFamily: "monospace", fontSize: "20px",
+      color, stroke: "#000000", strokeThickness: 3, fontStyle: "bold",
     }).setOrigin(0.5);
     t.setDepth(1000);
     this.tweens.add({
-      targets: t,
-      y: y - 60,
+      targets: t, y: y - 60,
       alpha: { from: 1, to: 0 },
-      duration: 1100,
-      ease: "Cubic.easeOut",
+      duration: 1100, ease: "Cubic.easeOut",
       onComplete: () => t.destroy(),
     });
   }
@@ -1457,9 +1748,13 @@ export class CombatScene extends Phaser.Scene {
       cardsSacrificed: this.cardsSacrificed,
       axesRemaining: (Object.values(this.axisPool) as number[]).reduce((s, v) => s + v, 0),
     };
+    // Stocke cartes jouées pour télémétrie (Outcome utilisera)
+    (GameState as any).lastCombatCards = this.cardsPlayedThisCombat;
     audio.sfx(result);
     this.cameraShake(result === "victory" ? 0.01 : 0.02, 600);
     vibrate([60, 30, 60]);
+
+    recordCombatResult(this.circleDef.id, result);
 
     this.time.delayedCall(800, () => {
       this.cameras.main.fadeOut(1000, 0, 0, 0);

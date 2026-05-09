@@ -6,9 +6,17 @@ import { DeckRevealScene } from "./scenes/DeckRevealScene";
 import { CombatScene } from "./scenes/CombatScene";
 import { OutcomeScene } from "./scenes/OutcomeScene";
 import { MenuScene } from "./scenes/MenuScene";
+import { MarketScene } from "./scenes/MarketScene";
+import { RestScene } from "./scenes/RestScene";
+import { CodexScene } from "./scenes/CodexScene";
+import { TalentScene } from "./scenes/TalentScene";
+import { LetterScene } from "./scenes/LetterScene";
+import { EndingScene } from "./scenes/EndingScene";
+import { ImprintScene } from "./scenes/ImprintScene";
+import { PacteConteurScene } from "./scenes/PacteConteurScene";
 
-const GAME_WIDTH = 540;   // mobile portrait base width
-const GAME_HEIGHT = 960;  // ratio 9:16
+const GAME_WIDTH = 540;
+const GAME_HEIGHT = 960;
 
 const config: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
@@ -22,7 +30,12 @@ const config: Phaser.Types.Core.GameConfig = {
   },
   pixelArt: true,
   roundPixels: true,
-  scene: [BootScene, CharacterScene, LifeScene, DeckRevealScene, CombatScene, OutcomeScene, MenuScene],
+  scene: [
+    BootScene, CharacterScene, LifeScene, DeckRevealScene,
+    CombatScene, OutcomeScene, MenuScene,
+    MarketScene, RestScene, CodexScene, TalentScene,
+    LetterScene, EndingScene, ImprintScene, PacteConteurScene,
+  ],
 };
 
 window.addEventListener("load", () => {
@@ -32,7 +45,6 @@ window.addEventListener("load", () => {
     if (el) el.style.display = "none";
   }, 600);
 
-  // 6.1 Wake lock - empêcher l'écran de s'éteindre
   if ("wakeLock" in navigator) {
     let wakeLock: any = null;
     const acquire = async () => {
@@ -44,16 +56,13 @@ window.addEventListener("load", () => {
     });
   }
 
-  // 6.5 Bouton retour Android - empêche fermeture si dans le jeu
   window.addEventListener("popstate", (e) => {
     e.preventDefault();
   });
 
-  // Push initial state pour qu'il y ait quelque chose à pop
   history.pushState(null, "", window.location.href);
 });
 
-// 9.6 Auto-pause quand app en background
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) {
     // Phaser pause auto via Page Visibility API normalement
