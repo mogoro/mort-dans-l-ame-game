@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { BootScene } from "./scenes/BootScene";
+import { CharacterScene } from "./scenes/CharacterScene";
 import { LifeScene } from "./scenes/LifeScene";
 import { DeckRevealScene } from "./scenes/DeckRevealScene";
 import { CombatScene } from "./scenes/CombatScene";
@@ -21,7 +22,7 @@ const config: Phaser.Types.Core.GameConfig = {
   },
   pixelArt: true,
   roundPixels: true,
-  scene: [BootScene, LifeScene, DeckRevealScene, CombatScene, OutcomeScene, MenuScene],
+  scene: [BootScene, CharacterScene, LifeScene, DeckRevealScene, CombatScene, OutcomeScene, MenuScene],
 };
 
 window.addEventListener("load", () => {

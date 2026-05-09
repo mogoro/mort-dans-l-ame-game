@@ -60,12 +60,12 @@ export class BootScene extends Phaser.Scene {
       }
     ).setOrigin(0.5);
 
-    // Bouton commencer
-    const startBtn = this.createButton(cx, cy + 50, "Commencer une vie", () => {
+    // Bouton commencer (passe par Character d'abord)
+    this.createButton(cx, cy + 50, "Commencer une vie", () => {
       audio.playPhase("ambient");
       clearCurrentRun();
       this.cameras.main.fadeOut(600, 0, 0, 0);
-      this.cameras.main.once("camerafadeoutcomplete", () => this.scene.start("Life"));
+      this.cameras.main.once("camerafadeoutcomplete", () => this.scene.start("Character"));
     }, 0x6a3018);
 
     // Reprendre run en cours si disponible

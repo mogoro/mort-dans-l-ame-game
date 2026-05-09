@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { GAME_WIDTH, GAME_HEIGHT } from "../main";
-import { GameState } from "../systems/GameState";
+import { GameState, getProfileNature } from "../systems/GameState";
 import { AXIS_COLOR, type Card } from "../data/cards";
 import type { Axis } from "../data/events";
 import { audio } from "../systems/AudioSystem";
@@ -76,6 +76,11 @@ export class CombatScene extends Phaser.Scene {
   private pendingSummon: { handIdx: number; targetZone: number } | null = null;
   private rerollUsed = false;     // 8.9 - 1 reroll par combat
   private cardsSacrificed = 0;    // pour score
+  private playerHp = 30;
+  private playerMaxHp = 30;
+  private playerHpBar?: Phaser.GameObjects.Rectangle;
+  private playerHpText?: Phaser.GameObjects.Text;
+  private playerAvatar?: Phaser.GameObjects.Image;
 
   // UI refs
   private bossHpText?: Phaser.GameObjects.Text;
@@ -107,29 +112,40 @@ export class CombatScene extends Phaser.Scene {
     this.playerBoard = [{ card: null }, { card: null }, { card: null }, { card: null }];
     this.enemyBoard = [{ card: null }, { card: null }, { card: null }, { card: null }];
 
-    // Boss — adapté difficulté + pacifist (8.1, 8.8)
+    // Boss adapté au profil (nature ombre/lumière/neutre)
+    const nature = getProfileNature();
+    const bossDef = this.pickBossForNature(nature);
+
+    // Boss — adapté difficulté + pacifist
     const dm = difficultyMul();
-    let bossHp = 30 * dm.bossHp;
-    let bossAtk = 6 * dm.bossAtk;
+    let bossHp = bossDef.hp * dm.bossHp;
+    let bossAtk = bossDef.atk * dm.bossAtk;
     if (Settings.pacifist) bossHp /= 2;
     bossHp = Math.round(bossHp);
     bossAtk = Math.round(bossAtk);
 
     this.enemyBoard[1] = {
       card: {
-        id: "cleopatre",
-        name: "Cléopâtre",
-        axis: "Luxure",
+        id: bossDef.id,
+        name: bossDef.name,
+        axis: bossDef.axis,
         cost: 0,
         atk: bossAtk,
         hp: bossHp,
         currentHp: bossHp,
         isBoss: true,
-      },
+        emoji: bossDef.emoji,
+      } as any,
     };
+    (this as any).bossEmoji = bossDef.emoji;
+    (this as any).bossName = bossDef.name;
     this.bossMaxHp = bossHp;
     this.cardsSacrificed = 0;
     this.rerollUsed = false;
+
+    // HP joueur
+    this.playerMaxHp = Math.round(30 * dm.playerStartHp);
+    this.playerHp = this.playerMaxHp;
 
     this.drawHand(4);
     this.turn = 1;
@@ -142,6 +158,19 @@ export class CombatScene extends Phaser.Scene {
 
     audio.playPhase("combat");
     this.setJudgeMessage(pickLine("enter"));
+  }
+
+  // 3 boss différents selon nature du profil
+  private pickBossForNature(nature: "ombre" | "lumiere" | "neutre"): {
+    id: string; name: string; emoji: string; atk: number; hp: number; axis: any;
+  } {
+    if (nature === "ombre") {
+      return { id: "cleopatre", name: "Cléopâtre", emoji: "👸", atk: 8, hp: 32, axis: "Luxure" };
+    } else if (nature === "lumiere") {
+      return { id: "seraphin",  name: "Séraphin Pâle", emoji: "👼", atk: 7, hp: 36, axis: "Foi" };
+    } else {
+      return { id: "minos",     name: "Minos le Juge", emoji: "🧙‍♂️", atk: 7, hp: 30, axis: "Justice" };
+    }
   }
 
   // ============================================================================
@@ -304,7 +333,8 @@ export class CombatScene extends Phaser.Scene {
     const judgeCircle = this.add.circle(0, 0, 32, 0x4a0a14);
     judgeCircle.setStrokeStyle(3, 0xc83838);
     judgePortrait.add(judgeCircle);
-    judgePortrait.add(this.add.text(0, 0, "👸", { fontSize: "32px" }).setOrigin(0.5));
+    const bossEmojiText = (this as any).bossEmoji || "👸";
+    judgePortrait.add(this.add.text(0, 0, bossEmojiText, { fontSize: "32px" }).setOrigin(0.5));
     this.tweens.add({
       targets: judgeCircle,
       scale: { from: 1, to: 1.1 },
@@ -463,8 +493,8 @@ export class CombatScene extends Phaser.Scene {
       bg.on("pointerdown", () => this.confirmSacrifice(zoneIdx));
     }
 
-    // Emoji art (utilise card.emoji si défini)
-    const emoji = card.isBoss ? "👸" : this.getCardEmoji(card.axis, card);
+    // Emoji art (utilise card.emoji si défini, sinon emoji axe)
+    const emoji = card.isBoss ? ((this as any).bossEmoji || "👸") : this.getCardEmoji(card.axis, card);
     const emojiText = this.add.text(0, -h / 2 + 50, emoji, {
       fontSize: card.isBoss ? "44px" : "30px",
     }).setOrigin(0.5);
@@ -867,13 +897,37 @@ export class CombatScene extends Phaser.Scene {
       0xc83838
     );
     this.hudContainer.add(this.bossHpFill);
-    this.bossHpText = this.add.text(GAME_WIDTH / 2, bossBarY, `Cléopâtre  ${bossHp}/${this.bossMaxHp}`, {
+    const bossName = (this as any).bossName || "Boss";
+    this.bossHpText = this.add.text(GAME_WIDTH / 2, bossBarY, `${bossName}  ${bossHp}/${this.bossMaxHp}`, {
       fontFamily: "monospace",
       fontSize: "10px",
       color: "#fff5dc",
       fontStyle: "bold",
     }).setOrigin(0.5);
     this.hudContainer.add(this.bossHpText);
+
+    // Joueur HP bar (juste au-dessus de la main)
+    const playerHpY = GAME_HEIGHT - 250;
+    const pBarBg = this.add.rectangle(GAME_WIDTH / 2, playerHpY, barW, 16, 0x000000, 0.75);
+    pBarBg.setStrokeStyle(2, 0x88c060);
+    this.hudContainer.add(pBarBg);
+    const pPct = Math.max(0, this.playerHp / this.playerMaxHp);
+    const pFillW = barW * pPct;
+    this.playerHpBar = this.add.rectangle(
+      GAME_WIDTH / 2 - barW / 2 + pFillW / 2,
+      playerHpY,
+      pFillW,
+      14,
+      pPct > 0.5 ? 0x6ae060 : pPct > 0.25 ? 0xe8c040 : 0xe04040
+    );
+    this.hudContainer.add(this.playerHpBar);
+    this.playerHpText = this.add.text(GAME_WIDTH / 2, playerHpY, `❤ Toi  ${this.playerHp}/${this.playerMaxHp}`, {
+      fontFamily: "monospace",
+      fontSize: "11px",
+      color: "#fff5dc",
+      fontStyle: "bold",
+    }).setOrigin(0.5);
+    this.hudContainer.add(this.playerHpText);
 
     // Pool d'âme (top 4 axes)
     const top = (Object.entries(this.axisPool) as [Axis, number][])
@@ -1198,7 +1252,7 @@ export class CombatScene extends Phaser.Scene {
         this.drawHand(2);
 
         const total = (Object.values(this.axisPool) as number[]).reduce((s, v) => s + v, 0);
-        if (total < 5) {
+        if (this.playerHp <= 0 || total < 5) {
           this.endCombat("defeat");
           return;
         }
@@ -1229,12 +1283,18 @@ export class CombatScene extends Phaser.Scene {
           this.playerBoard[i].card = null;
         }
       } else {
-        // Attaque directe sur le pool axe Luxure
-        this.axisPool["Luxure"] = Math.max(0, this.axisPool["Luxure"] - enemy.atk);
-        this.cameraShake(0.008, 250);
+        // Attaque directe sur HP du joueur
+        this.playerHp = Math.max(0, this.playerHp - enemy.atk);
+        this.cameraShake(0.01, 300);
         audio.sfx("damage");
-        this.flashFlying(`-${enemy.atk} Luxure`, GAME_WIDTH / 2, 700, "#e08080");
+        vibrate([40, 20, 40]);
+        this.flashFlying(`-${enemy.atk} HP`, GAME_WIDTH / 2, 700, "#ff5050");
         if (Math.random() < 0.5) this.setJudgeMessage(pickLine("enemyAttack"));
+        this.refreshPlayerHpBar();
+        if (this.playerHp <= 0) {
+          this.endCombat("defeat");
+          return;
+        }
       }
 
       this.renderScene();
@@ -1242,6 +1302,11 @@ export class CombatScene extends Phaser.Scene {
       this.time.delayedCall(500, next);
     };
     next();
+  }
+
+  private refreshPlayerHpBar(): void {
+    // re-render hud pour repartir frais
+    this.renderHud();
   }
 
   // 1.7 Zoom carte au long-press
