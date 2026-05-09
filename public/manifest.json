@@ -1,0 +1,26 @@
+{
+  "name": "Mort dans l'âme",
+  "short_name": "MortDansL'Ame",
+  "description": "Card adventure narratif et roguelike. Vis. Meurs. Résiste aux Enfers.",
+  "start_url": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1a0a06",
+  "theme_color": "#1a0a06",
+  "lang": "fr",
+  "categories": ["games"],
+  "icons": [
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -7,6 +7,11 @@ interface GameStateData {
   profile: Record<Axis, number>;
   deck: Card[];
   outcome?: "victory" | "defeat";
+  combatStats?: {
+    turns: number;
+    cardsSacrificed: number;
+    axesRemaining: number;
+  };
 }
 
 export const GameState: GameStateData = {

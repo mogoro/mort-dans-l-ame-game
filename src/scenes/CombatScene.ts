@@ -4,10 +4,19 @@ import { GameState } from "../systems/GameState";
 import { AXIS_COLOR, type Card } from "../data/cards";
 import type { Axis } from "../data/events";
 import { audio } from "../systems/AudioSystem";
+import { Settings, animSpeed, shakeFactor, difficultyMul, vibrate, DEBUG } from "../systems/Settings";
 
 interface BoardSlot {
-  card: (Card & { currentHp: number; isBoss?: boolean; sickness?: boolean }) | null;
+  card: (Card & {
+    currentHp: number;
+    isBoss?: boolean;
+    sickness?: boolean;
+    bleeding?: number;   // Saignement : -X HP/tour
+    block?: number;      // Bloc absorbé avant HP
+  }) | null;
 }
+
+const HAND_LIMIT = 6; // 2.9
 
 const VOICE_LINES = {
   enter: [
@@ -64,6 +73,8 @@ export class CombatScene extends Phaser.Scene {
 
   // sacrifice : index du monstre joueur sélectionné comme sacrifice + carte qui attend
   private pendingSummon: { handIdx: number; targetZone: number } | null = null;
+  private rerollUsed = false;     // 8.9 - 1 reroll par combat
+  private cardsSacrificed = 0;    // pour score
 
   // UI refs
   private bossHpText?: Phaser.GameObjects.Text;
@@ -93,20 +104,29 @@ export class CombatScene extends Phaser.Scene {
     this.playerBoard = [{ card: null }, { card: null }, { card: null }, { card: null }];
     this.enemyBoard = [{ card: null }, { card: null }, { card: null }, { card: null }];
 
-    // Boss
+    // Boss — adapté difficulté + pacifist (8.1, 8.8)
+    const dm = difficultyMul();
+    let bossHp = 30 * dm.bossHp;
+    let bossAtk = 6 * dm.bossAtk;
+    if (Settings.pacifist) bossHp /= 2;
+    bossHp = Math.round(bossHp);
+    bossAtk = Math.round(bossAtk);
+
     this.enemyBoard[1] = {
       card: {
         id: "cleopatre",
         name: "Cléopâtre",
         axis: "Luxure",
         cost: 0,
-        atk: 6,
-        hp: 30,
-        currentHp: 30,
+        atk: bossAtk,
+        hp: bossHp,
+        currentHp: bossHp,
         isBoss: true,
       },
     };
-    this.bossMaxHp = 30;
+    this.bossMaxHp = bossHp;
+    this.cardsSacrificed = 0;
+    this.rerollUsed = false;
 
     this.drawHand(4);
     this.turn = 1;
@@ -173,7 +193,20 @@ export class CombatScene extends Phaser.Scene {
   }
 
   private cameraShake(intensity = 0.005, duration = 200): void {
-    this.cameras.main.shake(duration, intensity);
+    if (Settings.reduceFlashes && intensity > 0.005) intensity *= shakeFactor();
+    this.cameras.main.shake(duration * animSpeed(), intensity * shakeFactor());
+  }
+
+  // 1.1 Hit-stop : pause brève sur dégâts importants
+  private hitStop(durationMs = 60): Promise<void> {
+    if (Settings.reduceFlashes) return Promise.resolve();
+    return new Promise((resolve) => {
+      this.time.timeScale = 0.001;
+      setTimeout(() => {
+        this.time.timeScale = 1;
+        resolve();
+      }, durationMs);
+    });
   }
 
   // ============================================================================
@@ -181,10 +214,31 @@ export class CombatScene extends Phaser.Scene {
   // ============================================================================
 
   private renderBackground(): void {
+    // 5.7 Palette par cercle - Luxure = pourpre/rose
+    const c1 = 0x1a0a14;
+    const c2 = 0x3a1428;
     const bg = this.add.graphics();
-    bg.fillGradientStyle(0x1a0a06, 0x1a0a06, 0x3a1c0a, 0x3a1c0a, 1);
+    bg.fillGradientStyle(c1, c1, c2, c2, 1);
     bg.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
     bg.setDepth(-100);
+
+    // 5.6 Vignette (bords sombres)
+    const vignette = this.add.graphics();
+    vignette.setDepth(2000);
+    const center = { x: GAME_WIDTH / 2, y: GAME_HEIGHT / 2 };
+    for (let r = 200; r < GAME_WIDTH; r += 30) {
+      const alpha = Math.min(0.5, (r - 200) / 600);
+      vignette.fillStyle(0x000000, alpha * 0.04);
+      vignette.fillCircle(center.x, center.y, r);
+    }
+    // Bordures noires fines aux 4 coins (vignette plus marquée)
+    const edge = this.add.graphics();
+    edge.setDepth(1500);
+    edge.fillStyle(0x000000, 0.3);
+    edge.fillRect(0, 0, GAME_WIDTH, 30);
+    edge.fillRect(0, GAME_HEIGHT - 30, GAME_WIDTH, 30);
+    edge.fillRect(0, 0, 20, GAME_HEIGHT);
+    edge.fillRect(GAME_WIDTH - 20, 0, 20, GAME_HEIGHT);
 
     // Bougies aux 4 coins
     const positions = [
@@ -442,7 +496,6 @@ export class CombatScene extends Phaser.Scene {
       this.tweens.add({ targets: bellGfx, scale: 1, duration: 200 });
     });
     hit.on("pointerdown", () => {
-      // Animation cloche qui sonne
       this.tweens.add({
         targets: bellGfx,
         angle: { from: -15, to: 15 },
@@ -451,8 +504,41 @@ export class CombatScene extends Phaser.Scene {
         repeat: 2,
       });
       audio.sfx("bell");
+      vibrate(20);
       this.endTurn();
     });
+
+    // 8.9 Bouton Reroll (1× par combat) à gauche-bas
+    if (!this.rerollUsed) {
+      const rerollC = this.add.container(60, GAME_HEIGHT - 40);
+      const rBg = this.add.circle(0, 0, 22, 0x2a1810, 0.95);
+      rBg.setStrokeStyle(2, 0x88a040);
+      rerollC.add(rBg);
+      rerollC.add(this.add.text(0, 0, "🔄", { fontSize: "18px" }).setOrigin(0.5));
+      rerollC.add(this.add.text(0, 32, "REROLL", {
+        fontFamily: "Georgia, serif",
+        fontSize: "8px",
+        color: "#88a040",
+        fontStyle: "italic",
+      }).setOrigin(0.5));
+      rBg.setInteractive({ useHandCursor: true });
+      rBg.on("pointerdown", () => this.rerollHand());
+      this.bellContainer?.add(rerollC);
+    }
+  }
+
+  private rerollHand(): void {
+    if (this.rerollUsed) return;
+    this.rerollUsed = true;
+    audio.sfx("draw");
+    vibrate(15);
+    this.discard.push(...this.hand);
+    this.hand = [];
+    this.deck = this.shuffle([...this.deck, ...this.discard]);
+    this.discard = [];
+    this.drawHand(4);
+    this.setJudgeMessage("Tu reprends ton souffle. La pioche change.");
+    this.renderScene();
   }
 
   // ============================================================================
@@ -533,6 +619,18 @@ export class CombatScene extends Phaser.Scene {
       bg.setInteractive({ useHandCursor: true, draggable: playable });
       this.input.setDraggable(bg, playable);
 
+      // 1.3 Pulse subtle si jouable
+      if (playable && !this.pendingSummon) {
+        this.tweens.add({
+          targets: c,
+          scaleX: { from: 1, to: 1.04 },
+          scaleY: { from: 1, to: 1.04 },
+          duration: 1500,
+          yoyo: true,
+          repeat: -1,
+        });
+      }
+
       bg.on("pointerover", () => {
         if (!playable || c.getData("dragging") || this.pendingSummon) return;
         this.tweens.add({ targets: c, y: handY - 18, duration: 150 });
@@ -548,6 +646,9 @@ export class CombatScene extends Phaser.Scene {
         (this as any).dragSourceIdx = i;
         this.renderBoard(); // re-render pour highlight zones
         audio.sfx("click");
+        vibrate(8); // 1.9
+        // 5.9 Carte transparente pendant drag
+        bg.setAlpha(0.7);
       });
       bg.on("drag", (_p: Phaser.Input.Pointer, dx: number, dy: number) => {
         c.x = c.getData("startX") + dx;
@@ -557,6 +658,7 @@ export class CombatScene extends Phaser.Scene {
         c.setDepth(0);
         c.setData("dragging", false);
         (this as any).dragSourceIdx = null;
+        bg.setAlpha(playable ? 1 : 0.4);
 
         // Détecter zone joueur la plus proche
         const playerY = 460;
@@ -695,6 +797,7 @@ export class CombatScene extends Phaser.Scene {
 
   private drawHand(n: number): void {
     for (let i = 0; i < n; i++) {
+      if (this.hand.length >= HAND_LIMIT) break; // 2.9 limite main
       if (this.deck.length === 0) {
         if (this.discard.length === 0) break;
         this.deck = this.shuffle(this.discard);
@@ -771,6 +874,7 @@ export class CombatScene extends Phaser.Scene {
     if (!this.pendingSummon) return;
     const sacrificed = this.playerBoard[sacrificeZoneIdx].card;
     if (!sacrificed || sacrificed.isBoss) return;
+    this.cardsSacrificed++;
 
     // Le sacrifice rend X points d'axe (les points qu'avait coûté la carte sacrifiée)
     const refund = sacrificed.cost;
@@ -969,8 +1073,14 @@ export class CombatScene extends Phaser.Scene {
   private endCombat(result: "victory" | "defeat"): void {
     this.finished = true;
     GameState.outcome = result;
+    GameState.combatStats = {
+      turns: this.turn,
+      cardsSacrificed: this.cardsSacrificed,
+      axesRemaining: (Object.values(this.axisPool) as number[]).reduce((s, v) => s + v, 0),
+    };
     audio.sfx(result);
     this.cameraShake(result === "victory" ? 0.01 : 0.02, 600);
+    vibrate([60, 30, 60]);
 
     this.time.delayedCall(800, () => {
       this.cameras.main.fadeOut(1000, 0, 0, 0);
