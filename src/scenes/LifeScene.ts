@@ -1,12 +1,16 @@
 import Phaser from "phaser";
 import { GAME_WIDTH, GAME_HEIGHT } from "../main";
-import { LIFE_EVENTS } from "../data/events";
+import { pickRandomLifeEvents, type LifeEvent } from "../data/events";
 import { GameState, applyDelta } from "../systems/GameState";
+import { audio } from "../systems/AudioSystem";
+import { animSpeed } from "../systems/Settings";
+import { recordChoice } from "../systems/SaveSystem";
 
 export class LifeScene extends Phaser.Scene {
   private currentEventIdx = 0;
   private container?: Phaser.GameObjects.Container;
   private isAnimating = false;
+  private lifeEvents: LifeEvent[] = [];
 
   constructor() {
     super("Life");
@@ -14,6 +18,8 @@ export class LifeScene extends Phaser.Scene {
 
   create(): void {
     this.currentEventIdx = 0;
+    this.lifeEvents = pickRandomLifeEvents();
+    audio.playPhase("life");
     this.cameras.main.fadeIn(500, 0, 0, 0);
     this.renderEvent();
   }
@@ -22,7 +28,7 @@ export class LifeScene extends Phaser.Scene {
     if (this.container) this.container.destroy();
     this.container = this.add.container(0, 0);
 
-    const evt = LIFE_EVENTS[this.currentEventIdx];
+    const evt = this.lifeEvents[this.currentEventIdx];
 
     // Background dégradé selon phase (Enfance bleu, Ado violet, Adulte ocre)
     const colors = [
@@ -47,7 +53,7 @@ export class LifeScene extends Phaser.Scene {
 
     // Progress bar (3 segments)
     const progY = 95;
-    for (let i = 0; i < LIFE_EVENTS.length; i++) {
+    for (let i = 0; i < this.lifeEvents.length; i++) {
       const seg = this.add.rectangle(
         GAME_WIDTH / 2 + (i - 1) * 60,
         progY,
@@ -177,7 +183,7 @@ export class LifeScene extends Phaser.Scene {
     // Pause + advance
     this.time.delayedCall(1700, () => {
       this.currentEventIdx++;
-      if (this.currentEventIdx >= LIFE_EVENTS.length) {
+      if (this.currentEventIdx >= this.lifeEvents.length) {
         this.cameras.main.fadeOut(800, 0, 0, 0);
         this.cameras.main.once("camerafadeoutcomplete", () => {
           this.scene.start("DeckReveal");
