@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { GAME_WIDTH, GAME_HEIGHT } from "../main";
+import { audio } from "../systems/AudioSystem";
 
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -86,12 +87,41 @@ export class BootScene extends Phaser.Scene {
       }
     ).setOrigin(0.5);
 
-    // Click handler global
-    this.input.once("pointerdown", () => {
+    // Toggle audio en haut-droite (icône note)
+    this.createAudioToggle();
+
+    // Click handler global - mais évite la zone du toggle audio
+    this.input.on("pointerdown", (p: Phaser.Input.Pointer) => {
+      // Si on tape près du toggle audio (top-right), ignorer
+      if (p.x > GAME_WIDTH - 60 && p.y < 60) return;
+      audio.playPhase("ambient");
       this.cameras.main.fadeOut(600, 0, 0, 0);
       this.cameras.main.once("camerafadeoutcomplete", () => {
         this.scene.start("Life");
       });
+    });
+  }
+
+  private createAudioToggle(): void {
+    const x = GAME_WIDTH - 30;
+    const y = 30;
+    const c = this.add.container(x, y);
+    c.setDepth(1000);
+
+    const bg = this.add.circle(0, 0, 22, 0x2a1810, 0.9);
+    bg.setStrokeStyle(2, 0xd4a040);
+    c.add(bg);
+
+    const icon = this.add.text(0, 0, audio.enabled ? "🔊" : "🔇", {
+      fontSize: "20px",
+    }).setOrigin(0.5);
+    c.add(icon);
+
+    bg.setInteractive({ useHandCursor: true });
+    bg.on("pointerdown", () => {
+      const enabled = audio.toggle();
+      icon.setText(enabled ? "🔊" : "🔇");
+      if (enabled) audio.playPhase("ambient");
     });
   }
 
