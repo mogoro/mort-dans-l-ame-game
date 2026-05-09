@@ -5,6 +5,7 @@ import { GameState, applyDelta } from "../systems/GameState";
 import { audio } from "../systems/AudioSystem";
 import { animSpeed } from "../systems/Settings";
 import { recordChoice } from "../systems/SaveSystem";
+import { drawIllustration, getIllustrationKind } from "./LifeIllustrations";
 
 export class LifeScene extends Phaser.Scene {
   private currentEventIdx = 0;
@@ -72,8 +73,22 @@ export class LifeScene extends Phaser.Scene {
     }).setOrigin(0.5);
     this.container.add(code);
 
-    // Trame (avec word wrap)
-    const trame = this.add.text(GAME_WIDTH / 2, 180, evt.trame, {
+    // Vignette pixel-art animée selon l'événement
+    const illustW = Math.min(GAME_WIDTH - 40, 360);
+    const illustH = 160;
+    const illustY = 220;
+    const illustContainer = this.add.container(GAME_WIDTH / 2, illustY);
+    illustContainer.setAlpha(0);
+    drawIllustration(this, illustContainer, getIllustrationKind(evt.code), illustW, illustH);
+    this.container.add(illustContainer);
+    this.tweens.add({
+      targets: illustContainer,
+      alpha: 1,
+      duration: 700,
+    });
+
+    // Trame (avec word wrap) — décalée sous la vignette
+    const trame = this.add.text(GAME_WIDTH / 2, illustY + illustH / 2 + 20, evt.trame, {
       fontFamily: "Georgia, serif",
       fontSize: "16px",
       color: "#f0d8b0",
