@@ -1,40 +1,55 @@
 import type { Axis } from "./events";
 
+// Sigils Inscryption-like (item 2.1 simplifié) :
+// - bleed: l'attaqué reçoit Saignement
+// - shield: bloc 2 au tour de pose
+// - swift: peut attaquer le tour de pose (no sickness)
+// - vampire: vol de vie (récupère HP = dégâts infligés)
+export type Sigil = "bleed" | "shield" | "swift" | "vampire";
+
+export const SIGIL_LABELS: Record<Sigil, { label: string; icon: string; desc: string }> = {
+  bleed:   { label: "Saignée",   icon: "🩸", desc: "Inflige Saignement (1 dmg/tour) à l'attaqué." },
+  shield:  { label: "Bouclier",  icon: "🛡",  desc: "+2 bloc au tour de pose." },
+  swift:   { label: "Rapide",    icon: "⚡", desc: "Peut attaquer le tour de pose." },
+  vampire: { label: "Vampire",   icon: "🦇", desc: "Vol de vie : récupère +1 HP par dégât infligé." },
+};
+
 export interface Card {
   id: string;
   name: string;
   axis: Axis;
-  cost: number;       // coût en points d'axe
+  cost: number;
   atk: number;
   hp: number;
-  effect?: string;    // texte flavor
+  effect?: string;
+  sigils?: Sigil[];  // 2.1 sigils sur certaines cartes
 }
 
 // Pool minimal proto Cercle Luxure
 export const CARD_POOL: Record<Axis, Card[]> = {
   Luxure: [
-    { id: "luxure-1", name: "Tentation",  axis: "Luxure", cost: 12, atk: 5, hp: 3, effect: "Inflige 5. Ton ennemi avance." },
-    { id: "luxure-2", name: "Étreinte",   axis: "Luxure", cost: 16, atk: 7, hp: 4, effect: "Inflige 7. Tu reçois Maudit." },
+    { id: "luxure-1", name: "Tentation",  axis: "Luxure", cost: 12, atk: 5, hp: 3, effect: "Vol de vie.", sigils: ["vampire"] },
+    { id: "luxure-2", name: "Étreinte",   axis: "Luxure", cost: 16, atk: 7, hp: 4, effect: "Inflige 7. Saignement.", sigils: ["bleed"] },
   ],
   Charite: [
-    { id: "charite-1", name: "Main tendue", axis: "Charite", cost: 12, atk: 3, hp: 5, effect: "Soigne 6 PV." },
-    { id: "charite-2", name: "Don",         axis: "Charite", cost: 16, atk: 2, hp: 8, effect: "Soigne 14, retire 1 carte." },
+    { id: "charite-1", name: "Main tendue", axis: "Charite", cost: 12, atk: 3, hp: 5, effect: "Bouclier au tour de pose.", sigils: ["shield"] },
+    { id: "charite-2", name: "Don",         axis: "Charite", cost: 16, atk: 2, hp: 8, effect: "Bouclier solide.", sigils: ["shield"] },
   ],
   Colere: [
-    { id: "colere-1", name: "Saignée",     axis: "Colere", cost: 12, atk: 6, hp: 2, effect: "Inflige 6 dégâts." },
-    { id: "colere-2", name: "Charge",      axis: "Colere", cost: 16, atk: 9, hp: 3, effect: "Inflige 9, tu reçois 2." },
+    { id: "colere-1", name: "Saignée",     axis: "Colere", cost: 12, atk: 6, hp: 2, effect: "Saignement.", sigils: ["bleed"] },
+    { id: "colere-2", name: "Charge",      axis: "Colere", cost: 16, atk: 9, hp: 3, effect: "Frappe immédiate.", sigils: ["swift"] },
   ],
   Foi: [
-    { id: "foi-1",     name: "Souffle",   axis: "Foi", cost: 8,  atk: 2, hp: 3, effect: "Pioche 1 carte." },
-    { id: "foi-2",     name: "Serment",   axis: "Foi", cost: 16, atk: 4, hp: 6, effect: "+5 énergie au prochain tour." },
+    { id: "foi-1",     name: "Souffle",   axis: "Foi", cost: 8,  atk: 2, hp: 3, effect: "Carte légère et rapide.", sigils: ["swift"] },
+    { id: "foi-2",     name: "Serment",   axis: "Foi", cost: 16, atk: 4, hp: 6, effect: "Solide bouclier.", sigils: ["shield"] },
   ],
   Prudence: [
     { id: "prudence-1", name: "Réflexion", axis: "Prudence", cost: 8,  atk: 1, hp: 4, effect: "Scry 4." },
     { id: "prudence-2", name: "Anticipation", axis: "Prudence", cost: 12, atk: 3, hp: 5, effect: "Vois l'intent ennemi." },
   ],
   Force: [
-    { id: "force-1", name: "Coup direct",  axis: "Force", cost: 12, atk: 7, hp: 4, effect: "Inflige 7." },
-    { id: "force-2", name: "Endurance",    axis: "Force", cost: 16, atk: 4, hp: 8, effect: "Bloque 12." },
+    { id: "force-1", name: "Coup direct",  axis: "Force", cost: 12, atk: 7, hp: 4, effect: "Frappe directe.", sigils: ["swift"] },
+    { id: "force-2", name: "Endurance",    axis: "Force", cost: 16, atk: 4, hp: 8, effect: "Bloc puissant.", sigils: ["shield"] },
   ],
   Temperance: [
     { id: "temperance-1", name: "Équilibre", axis: "Temperance", cost: 12, atk: 4, hp: 6, effect: "Bloque jusqu'à 8." },

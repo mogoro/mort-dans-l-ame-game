@@ -11,8 +11,9 @@ interface BoardSlot {
     currentHp: number;
     isBoss?: boolean;
     sickness?: boolean;
-    bleeding?: number;   // Saignement : -X HP/tour
+    bleeding?: number;   // Saignement : perd 1 HP/tour pendant N tours
     block?: number;      // Bloc absorbé avant HP
+    vulnerable?: number; // Reçoit +50% dégâts pendant N tours
   }) | null;
 }
 
@@ -85,6 +86,8 @@ export class CombatScene extends Phaser.Scene {
   private boardContainer?: Phaser.GameObjects.Container;
   private hudContainer?: Phaser.GameObjects.Container;
   private candleFlames: Phaser.GameObjects.Arc[] = [];
+  private cardZoomOverlay?: Phaser.GameObjects.Container;
+  private longPressTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
     super("Combat");
@@ -454,6 +457,33 @@ export class CombatScene extends Phaser.Scene {
       fontStyle: "bold",
     }).setOrigin(1, 1));
 
+    // 2.1 Sigils icons sur la carte (max 2 visibles en haut-droite)
+    const sigilIcons: Record<string, string> = {
+      bleed: "🩸", shield: "🛡", swift: "⚡", vampire: "🦇",
+    };
+    if (card.sigils && card.sigils.length > 0) {
+      card.sigils.slice(0, 2).forEach((sig, idx) => {
+        c.add(this.add.text(w / 2 - 4 - idx * 14, -h / 2 + 4, sigilIcons[sig] || "✦", {
+          fontSize: "11px",
+        }).setOrigin(1, 0));
+      });
+    }
+
+    // Statut Saignement visible
+    if ((card.bleeding || 0) > 0) {
+      c.add(this.add.text(-w / 2 + 4, -h / 2 + 4, `🩸${card.bleeding}`, {
+        fontSize: "9px",
+        color: "#ff6060",
+      }).setOrigin(0, 0));
+    }
+    // Statut Bloc visible
+    if ((card.block || 0) > 0) {
+      c.add(this.add.text(-w / 2 + 4, -h / 2 + 16, `🛡${card.block}`, {
+        fontSize: "9px",
+        color: "#60a0e0",
+      }).setOrigin(0, 0));
+    }
+
     return c;
   }
 
@@ -615,6 +645,18 @@ export class CombatScene extends Phaser.Scene {
         fontStyle: "bold",
       }).setOrigin(1, 1));
 
+      // 2.1 Sigils icons sur la carte en main
+      const sigilIconsHand: Record<string, string> = {
+        bleed: "🩸", shield: "🛡", swift: "⚡", vampire: "🦇",
+      };
+      if (card.sigils && card.sigils.length > 0) {
+        card.sigils.slice(0, 2).forEach((sig, idx) => {
+          c.add(this.add.text(cardW / 2 - 4 - idx * 12, -cardH / 2 + 4, sigilIconsHand[sig] || "✦", {
+            fontSize: "10px",
+          }).setOrigin(1, 0));
+        });
+      }
+
       // Drag setup
       bg.setInteractive({ useHandCursor: true, draggable: playable });
       this.input.setDraggable(bg, playable);
@@ -641,14 +683,27 @@ export class CombatScene extends Phaser.Scene {
       });
 
       bg.on("dragstart", () => {
+        if (this.longPressTimer) { clearTimeout(this.longPressTimer); this.longPressTimer = null; }
         c.setData("dragging", true);
         c.setDepth(100);
         (this as any).dragSourceIdx = i;
-        this.renderBoard(); // re-render pour highlight zones
+        this.renderBoard();
         audio.sfx("click");
-        vibrate(8); // 1.9
-        // 5.9 Carte transparente pendant drag
+        vibrate(8);
         bg.setAlpha(0.7);
+      });
+
+      // 6.2 Long-press preview = zoom carte en grand au centre
+      bg.on("pointerdown", (p: Phaser.Input.Pointer) => {
+        if (this.longPressTimer) clearTimeout(this.longPressTimer);
+        this.longPressTimer = setTimeout(() => {
+          if (!c.getData("dragging")) {
+            this.showCardZoom(card);
+          }
+        }, 500);
+      });
+      bg.on("pointerup", () => {
+        if (this.longPressTimer) { clearTimeout(this.longPressTimer); this.longPressTimer = null; }
       });
       bg.on("drag", (_p: Phaser.Input.Pointer, dx: number, dy: number) => {
         c.x = c.getData("startX") + dx;
@@ -850,8 +905,18 @@ export class CombatScene extends Phaser.Scene {
     const axis = card.axis;
     this.axisPool[axis] = (this.axisPool[axis] || 0) - card.cost;
 
+    // 2.1 Sigil "swift" : pas de summoning sickness
+    const swift = (card.sigils || []).includes("swift");
+    // 2.1 Sigil "shield" : +2 bloc au tour de pose
+    const shieldBlock = (card.sigils || []).includes("shield") ? 2 : 0;
+
     this.playerBoard[zoneIdx] = {
-      card: { ...card, currentHp: card.hp, sickness: true },
+      card: {
+        ...card,
+        currentHp: card.hp,
+        sickness: !swift,
+        block: shieldBlock,
+      },
     };
     this.hand.splice(handIdx, 1);
     this.discard.push(card);
@@ -956,13 +1021,27 @@ export class CombatScene extends Phaser.Scene {
       }
       const enemy = this.enemyBoard[i].card;
       if (enemy) {
-        enemy.currentHp -= myMon.atk;
+        // Calcul dégâts avec bloc + vulnérable (statuts 2.2)
+        let dmg = myMon.atk;
+        if ((enemy.vulnerable || 0) > 0) dmg = Math.round(dmg * 1.5);
+        const blockAbsorbed = Math.min(dmg, enemy.block || 0);
+        if (enemy.block) enemy.block -= blockAbsorbed;
+        const finalDmg = dmg - blockAbsorbed;
+        enemy.currentHp -= finalDmg;
+        // Sigil bleed -> applique Saignement
+        if ((myMon.sigils || []).includes("bleed")) {
+          enemy.bleeding = (enemy.bleeding || 0) + 2;
+        }
+        // Sigil vampire -> heal myMon
+        if ((myMon.sigils || []).includes("vampire") && finalDmg > 0) {
+          myMon.currentHp = Math.min(myMon.hp, myMon.currentHp + Math.ceil(finalDmg / 2));
+        }
         const ex = startX + i * (slotW + 8);
         const ey = 230;
         this.spawnBlood(ex, ey, 12);
         this.cameraShake(0.004, 150);
         audio.sfx("damage");
-        this.flashFlying(`-${myMon.atk}`, ex, ey, "#f08070");
+        this.flashFlying(`-${finalDmg}${blockAbsorbed > 0 ? ` (${blockAbsorbed} bloqué)` : ""}`, ex, ey, "#f08070");
         if (Math.random() < 0.4) this.setJudgeMessage(pickLine("damage"));
         if (enemy.currentHp <= 0) {
           this.enemyBoard[i].card = null;
@@ -995,6 +1074,28 @@ export class CombatScene extends Phaser.Scene {
   private enemyTurn(): void {
     this.setJudgeMessage(pickLine("endTurn"));
     audio.sfx("click");
+
+    // Tick saignement sur ennemis (status actif 2.2)
+    this.enemyBoard.forEach((slot, i) => {
+      const e = slot.card;
+      if (!e) return;
+      if ((e.bleeding || 0) > 0) {
+        e.currentHp -= 1;
+        e.bleeding = (e.bleeding || 0) - 1;
+        const slotW = 90;
+        const totalW = 4 * slotW + 3 * 8;
+        const startX = (GAME_WIDTH - totalW) / 2 + slotW / 2;
+        this.flashFlying(`🩸 -1`, startX + i * (slotW + 8), 230, "#ff6060");
+        if (e.currentHp <= 0) {
+          if (e.isBoss) {
+            // Boss tombe par saignement -> victoire
+            this.endCombat("victory");
+            return;
+          }
+          this.enemyBoard[i].card = null;
+        }
+      }
+    });
 
     let i = 0;
     const next = () => {
@@ -1048,6 +1149,94 @@ export class CombatScene extends Phaser.Scene {
       this.time.delayedCall(500, next);
     };
     next();
+  }
+
+  // 1.7 Zoom carte au long-press
+  private showCardZoom(card: Card): void {
+    if (this.cardZoomOverlay) this.cardZoomOverlay.destroy();
+    this.cardZoomOverlay = this.add.container(0, 0);
+    this.cardZoomOverlay.setDepth(5000);
+
+    const dim = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.85);
+    dim.setInteractive();
+    dim.on("pointerdown", () => {
+      this.cardZoomOverlay?.destroy();
+      this.cardZoomOverlay = undefined;
+    });
+    this.cardZoomOverlay.add(dim);
+
+    const palette = AXIS_COLOR[card.axis] || AXIS_COLOR.Foi;
+    const cardW = 280;
+    const cardH = 400;
+    const cx = GAME_WIDTH / 2;
+    const cy = GAME_HEIGHT / 2;
+
+    const cardBg = this.add.rectangle(cx, cy, cardW, cardH, palette.primary);
+    cardBg.setStrokeStyle(5, palette.secondary);
+    this.cardZoomOverlay.add(cardBg);
+
+    // Coût
+    const costCircle = this.add.circle(cx - cardW / 2 + 35, cy - cardH / 2 + 35, 28, palette.secondary);
+    costCircle.setStrokeStyle(4, palette.accent);
+    this.cardZoomOverlay.add(costCircle);
+    this.cardZoomOverlay.add(this.add.text(cx - cardW / 2 + 35, cy - cardH / 2 + 35, String(card.cost), {
+      fontFamily: "monospace", fontSize: "26px", color: "#fff5dc", fontStyle: "bold",
+    }).setOrigin(0.5));
+
+    // Emoji
+    this.cardZoomOverlay.add(this.add.text(cx, cy - 60, this.getCardEmoji(card.axis), {
+      fontSize: "100px",
+    }).setOrigin(0.5));
+
+    // Nom
+    this.cardZoomOverlay.add(this.add.text(cx, cy + 40, card.name, {
+      fontFamily: "Georgia, serif", fontSize: "26px",
+      color: "#" + palette.accent.toString(16).padStart(6, "0"),
+      fontStyle: "bold", align: "center",
+    }).setOrigin(0.5));
+
+    // Effect text
+    if (card.effect) {
+      this.cardZoomOverlay.add(this.add.text(cx, cy + 80, card.effect, {
+        fontFamily: "Georgia, serif", fontSize: "13px",
+        color: "#f0d8b0", align: "center", wordWrap: { width: cardW - 40 },
+      }).setOrigin(0.5));
+    }
+
+    // Sigils détaillés
+    if (card.sigils && card.sigils.length > 0) {
+      let sy = cy + 120;
+      card.sigils.forEach((sig) => {
+        const meta = (window as any).SIGIL_LABELS_INLINE?.[sig] ||
+          { bleed: { icon: "🩸", desc: "Inflige Saignement (1 dmg/tour) à l'attaqué." },
+            shield: { icon: "🛡", desc: "+2 bloc au tour de pose." },
+            swift: { icon: "⚡", desc: "Peut attaquer le tour de pose." },
+            vampire: { icon: "🦇", desc: "Vol de vie : récupère HP par dégât infligé." } }[sig];
+        if (!meta) return;
+        this.cardZoomOverlay?.add(this.add.text(cx - cardW / 2 + 20, sy, `${meta.icon} ${meta.desc}`, {
+          fontFamily: "Georgia, serif", fontSize: "11px",
+          color: "#a87a3a", wordWrap: { width: cardW - 40 },
+        }));
+        sy += 18;
+      });
+    }
+
+    // ATK / HP en bas
+    this.cardZoomOverlay.add(this.add.text(cx - cardW / 2 + 20, cy + cardH / 2 - 30, `⚔ ${card.atk}`, {
+      fontFamily: "monospace", fontSize: "22px", color: "#f08070", fontStyle: "bold",
+    }));
+    this.cardZoomOverlay.add(this.add.text(cx + cardW / 2 - 20, cy + cardH / 2 - 30, `❤ ${card.hp}`, {
+      fontFamily: "monospace", fontSize: "22px", color: "#80c08f", fontStyle: "bold",
+    }).setOrigin(1, 0));
+
+    // Hint fermer
+    this.cardZoomOverlay.add(this.add.text(cx, cy + cardH / 2 + 30, "Touche pour fermer", {
+      fontFamily: "Georgia, serif", fontSize: "11px", color: "#a87a3a", fontStyle: "italic",
+    }).setOrigin(0.5));
+
+    // Anim entrée
+    this.cardZoomOverlay.setScale(0);
+    this.tweens.add({ targets: this.cardZoomOverlay, scale: 1, duration: 200, ease: "Back.easeOut" });
   }
 
   private flashFlying(text: string, x: number, y: number, color: string): void {
