@@ -4,11 +4,12 @@
 
 import Phaser from "phaser";
 import { GAME_WIDTH, GAME_HEIGHT } from "../main";
-import { GameState } from "../systems/GameState";
+import { GameState, snapshotRun } from "../systems/GameState";
 import { rollMarketOffers, type MarketOffer, CURSE_OPTIONS, addDebt } from "../systems/Economy";
 import { audio } from "../systems/AudioSystem";
 import { CARD_POOL } from "../data/cards";
 import type { Axis } from "../data/events";
+import { saveCurrentRun } from "../systems/SaveSystem";
 
 export class MarketScene extends Phaser.Scene {
   private offers: MarketOffer[] = [];
@@ -22,6 +23,7 @@ export class MarketScene extends Phaser.Scene {
     this.cameras.main.fadeIn(500, 0, 0, 0);
     this.offers = rollMarketOffers(GameState.currentCircle);
     audio.playPhase("life");
+    saveCurrentRun(snapshotRun("Market"));
     this.renderScene();
   }
 

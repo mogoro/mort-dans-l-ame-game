@@ -129,7 +129,7 @@ export class EndingScene extends Phaser.Scene {
     });
   }
 
-  // F.6 — lettre générée selon profil
+  // F.6 — lettre générée selon profil + PNJ
   private generateLetter(ending: Ending): string {
     const profile = GameState.profile;
     const top3 = (Object.entries(profile) as [string, number][])
@@ -148,8 +148,25 @@ export class EndingScene extends Phaser.Scene {
     if (choices.find((c) => c.tag === "trahisseur")) memos.push("Tu as trahi quelqu'un que tu aimais.");
     if (choices.find((c) => c.tag === "saboteur")) memos.push("Tu as obtenu en marchant sur les autres.");
     if (choices.find((c) => c.tag === "fidele-enf")) memos.push("Tu as gardé un secret. Toute ta vie.");
+    if (choices.find((c) => c.tag === "violent-enf")) memos.push("Tu as fait du mal jeune. Tu n'as plus jamais oublié.");
+    if (choices.find((c) => c.tag === "voleur-enf")) memos.push("Tu as gardé l'argent. Le poids n'a jamais cessé.");
+
+    // F.3/F.10 — mention PNJ persistants selon relation
+    const npcLines: string[] = [];
+    GameState.npcs.forEach((n) => {
+      if (!n.alive) {
+        npcLines.push(`${n.name} a disparu en route.`);
+      } else if (n.relation > 50) {
+        npcLines.push(`${n.name} t'a accompagné(e) jusqu'au bout.`);
+      } else if (n.relation > 20) {
+        npcLines.push(`${n.name} t'a tendu la main, parfois.`);
+      } else if (n.relation < -30) {
+        npcLines.push(`${n.name} ne t'a plus jamais regardé.`);
+      }
+    });
 
     const memoBlock = memos.length > 0 ? memos.join(" ") + " " : "";
-    return `${memoBlock}Tu portais surtout ${top3[0][0]}, ${top3[1][0]} et ${top3[2][0]}. Tu as toujours manqué de ${bottom[0]}. C'est cela qu'on a écrit sur ta pierre.`;
+    const npcBlock = npcLines.length > 0 ? npcLines.join(" ") + " " : "";
+    return `${memoBlock}${npcBlock}Tu portais surtout ${top3[0][0]}, ${top3[1][0]} et ${top3[2][0]}. Tu as toujours manqué de ${bottom[0]}. C'est cela qu'on a écrit sur ta pierre.`;
   }
 }

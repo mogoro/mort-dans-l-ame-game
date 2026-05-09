@@ -14,6 +14,7 @@ import { LetterScene } from "./scenes/LetterScene";
 import { EndingScene } from "./scenes/EndingScene";
 import { ImprintScene } from "./scenes/ImprintScene";
 import { PacteConteurScene } from "./scenes/PacteConteurScene";
+import { NPCInterstitialScene } from "./scenes/NPCInterstitialScene";
 
 const GAME_WIDTH = 540;
 const GAME_HEIGHT = 960;
@@ -35,6 +36,7 @@ const config: Phaser.Types.Core.GameConfig = {
     CombatScene, OutcomeScene, MenuScene,
     MarketScene, RestScene, CodexScene, TalentScene,
     LetterScene, EndingScene, ImprintScene, PacteConteurScene,
+    NPCInterstitialScene,
   ],
 };
 

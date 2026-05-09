@@ -1,16 +1,18 @@
 // E.2 — repos : -X axe pour +50% HP au prochain combat
 import Phaser from "phaser";
 import { GAME_WIDTH, GAME_HEIGHT } from "../main";
-import { GameState } from "../systems/GameState";
+import { GameState, snapshotRun } from "../systems/GameState";
 import { ALL_AXES, type Axis } from "../data/events";
 import { takeRest } from "../systems/Economy";
 import { audio } from "../systems/AudioSystem";
+import { saveCurrentRun } from "../systems/SaveSystem";
 
 export class RestScene extends Phaser.Scene {
   constructor() { super("Rest"); }
 
   create(): void {
     this.cameras.main.fadeIn(500, 0, 0, 0);
+    saveCurrentRun(snapshotRun("Rest"));
 
     const bg = this.add.graphics();
     bg.fillGradientStyle(0x0a1418, 0x0a1418, 0x1a2a30, 0x1a2a30, 1);

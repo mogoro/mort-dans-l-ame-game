@@ -1,14 +1,15 @@
 import Phaser from "phaser";
 import { GAME_WIDTH, GAME_HEIGHT } from "../main";
-import { GameState, recordDeathFromEvent } from "../systems/GameState";
+import { GameState, recordDeathFromEvent, snapshotRun } from "../systems/GameState";
 import { Settings } from "../systems/Settings";
-import { recordRunResult, computeScore, clearCurrentRun, loadAchievements } from "../systems/SaveSystem";
+import { recordRunResult, computeScore, clearCurrentRun, loadAchievements, saveCurrentRun } from "../systems/SaveSystem";
 import { unlockRelic } from "../systems/Relics";
 import { audio } from "../systems/AudioSystem";
 import { awardGold, addDebt } from "../systems/Economy";
 import { unlockCodexPage } from "../systems/Codex";
 import { logRun, isTelemetryOptin } from "../systems/Telemetry";
 import { CIRCLES } from "../data/circles";
+import { pickNPCForCircle } from "./NPCInterstitialScene";
 
 export class OutcomeScene extends Phaser.Scene {
   constructor() { super("Outcome"); }
@@ -68,9 +69,13 @@ export class OutcomeScene extends Phaser.Scene {
     if (isRunOver) {
       recordRunResult(GameState.outcome!, GameState.profile, score);
       clearCurrentRun();
+      // Page codex aussi en défaite (la défaite est un récit, pas un échec)
+      if (!isVictory) unlockCodexPage(null);
     } else {
       // Page codex intermédiaire pour cercle gagné
       unlockCodexPage(null);
+      // Save : on est sur Outcome, le user peut quitter ici
+      saveCurrentRun(snapshotRun("Outcome"));
     }
 
     audio.playPhase(isVictory ? "victory" : "defeat");
@@ -157,16 +162,16 @@ export class OutcomeScene extends Phaser.Scene {
         this.cameras.main.once("camerafadeoutcomplete", () => this.scene.start("Ending"));
       }, isVictory ? 0xa07020 : 0x6a3018);
     } else {
-      // Cercle suivant via Repos puis Marché
+      // Cercle suivant via Repos ou Marché — PNJ peut apparaître entre les deux
       this.createButton(cx - 100, btnY, "Repos", () => {
         GameState.currentCircle++;
         this.cameras.main.fadeOut(500, 0, 0, 0);
-        this.cameras.main.once("camerafadeoutcomplete", () => this.scene.start("Rest"));
+        this.cameras.main.once("camerafadeoutcomplete", () => this.maybeNPCThen("Rest"));
       }, 0x4a3018);
       this.createButton(cx + 100, btnY, "Marché", () => {
         GameState.currentCircle++;
         this.cameras.main.fadeOut(500, 0, 0, 0);
-        this.cameras.main.once("camerafadeoutcomplete", () => this.scene.start("Market"));
+        this.cameras.main.once("camerafadeoutcomplete", () => this.maybeNPCThen("Market"));
       }, 0x6a3018);
     }
 
@@ -184,6 +189,16 @@ export class OutcomeScene extends Phaser.Scene {
         fontFamily: "monospace", fontSize: "11px", color: "#a87a3a",
       }).setOrigin(0.5);
     });
+  }
+
+  // F.10 — PNJ peut apparaître entre 2 cercles
+  private maybeNPCThen(fallback: string): void {
+    const npcId = pickNPCForCircle(GameState.currentCircle);
+    if (npcId) {
+      this.scene.start("NPCInterstitial", { npcId });
+    } else {
+      this.scene.start(fallback);
+    }
   }
 
   private createButton(x: number, y: number, label: string, onClick: () => void, color = 0x6a3018): void {

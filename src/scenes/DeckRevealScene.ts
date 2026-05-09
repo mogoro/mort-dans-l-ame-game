@@ -3,11 +3,12 @@
 // A.7 — consacrer une carte (trade-off)
 import Phaser from "phaser";
 import { GAME_WIDTH, GAME_HEIGHT } from "../main";
-import { GameState, buildInitialDeck } from "../systems/GameState";
+import { GameState, buildInitialDeck, snapshotRun } from "../systems/GameState";
 import { AXIS_COLOR, CARD_POOL, type Card, consecrate } from "../data/cards";
 import { ALL_AXES, type Axis } from "../data/events";
 import { audio } from "../systems/AudioSystem";
 import { hasRelic } from "../systems/Relics";
+import { saveCurrentRun } from "../systems/SaveSystem";
 
 export class DeckRevealScene extends Phaser.Scene {
   private step: "reveal" | "pick" | "guardian" | "consecrate" | "done" = "reveal";
@@ -22,6 +23,7 @@ export class DeckRevealScene extends Phaser.Scene {
     if (hasRelic("start_gold_10")) GameState.gold += 10;
 
     this.cameras.main.fadeIn(1000, 0, 0, 0);
+    saveCurrentRun(snapshotRun("DeckReveal"));
     this.renderReveal();
   }
 

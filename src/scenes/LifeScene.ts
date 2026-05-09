@@ -1,10 +1,10 @@
 import Phaser from "phaser";
 import { GAME_WIDTH, GAME_HEIGHT } from "../main";
 import { pickRandomLifeEvents, letterFor, type LifeEvent, NPC_DEFS, type OptionEvent } from "../data/events";
-import { GameState, applyDelta } from "../systems/GameState";
+import { GameState, applyDelta, snapshotRun } from "../systems/GameState";
 import { audio } from "../systems/AudioSystem";
 import { animSpeed } from "../systems/Settings";
-import { recordChoice } from "../systems/SaveSystem";
+import { recordChoice, saveCurrentRun } from "../systems/SaveSystem";
 import { recordChoiceTag } from "../systems/Judge";
 import { drawIllustration, getIllustrationKind } from "./LifeIllustrations";
 
@@ -36,6 +36,7 @@ export class LifeScene extends Phaser.Scene {
 
     audio.playPhase("life");
     this.cameras.main.fadeIn(500, 0, 0, 0);
+    saveCurrentRun(snapshotRun("Life"));
     this.renderEvent();
   }
 
@@ -251,6 +252,7 @@ export class LifeScene extends Phaser.Scene {
       const letter = trigger ? letterFor(trigger) : null;
       this.currentEventIdx++;
       if (this.currentEventIdx >= this.lifeEvents.length) {
+        // Fin de phase Vie → DeckReveal (avec lettre si trigger)
         this.cameras.main.fadeOut(800, 0, 0, 0);
         this.cameras.main.once("camerafadeoutcomplete", () => {
           if (letter) {
@@ -260,15 +262,10 @@ export class LifeScene extends Phaser.Scene {
           }
         });
       } else if (letter && Math.random() < 0.5) {
-        // 50% chance d'insérer une lettre entre 2 events
-        this.cameras.main.fadeOut(400, 0, 0, 0);
-        this.cameras.main.once("camerafadeoutcomplete", () => {
-          this.scene.start("Letter", { text: letter, nextScene: "Life" });
-          // Mais on perd le state...
-        });
-        // Fix : intermède inline plutôt
+        // Lettre inline entre 2 events (50% si trigger), pas de scene change
         this.showLetterInline(letter);
       } else {
+        // Event suivant
         this.cameras.main.fadeOut(400, 0, 0, 0);
         this.cameras.main.once("camerafadeoutcomplete", () => {
           this.cameras.main.fadeIn(400, 0, 0, 0);

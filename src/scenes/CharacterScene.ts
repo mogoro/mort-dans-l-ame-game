@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { GAME_WIDTH, GAME_HEIGHT } from "../main";
-import { GameState, persistCharacter, buildAvatarUrl, setNeutralProfile, buildInitialDeck } from "../systems/GameState";
+import { GameState, persistCharacter, buildAvatarUrl, setNeutralProfile, buildInitialDeck, resetForNewRun } from "../systems/GameState";
+import { NPC_DEFS } from "../data/events";
 import { audio } from "../systems/AudioSystem";
 
 const STYLES = [
@@ -137,6 +138,9 @@ export class CharacterScene extends Phaser.Scene {
 
     // Bouton Naître (vit la phase Vie)
     this.createBtn(GAME_WIDTH / 2 - 100, GAME_HEIGHT - 80, "Naître", () => {
+      // Reset complet pour nouvelle run
+      resetForNewRun();
+      GameState.npcs = NPC_DEFS.map((n) => ({ ...n, appearances: [] }));
       audio.sfx("bell");
       this.cameras.main.fadeOut(500, 0, 0, 0);
       this.cameras.main.once("camerafadeoutcomplete", () => this.scene.start("Life"));
@@ -144,12 +148,14 @@ export class CharacterScene extends Phaser.Scene {
 
     // Bouton Médium (skip Vie)
     this.createBtn(GAME_WIDTH / 2 + 100, GAME_HEIGHT - 80, "Médium (skip)", () => {
-      // Profil neutre + deck par défaut
+      // Profil neutre + deck par défaut + reset run state
+      resetForNewRun();
       setNeutralProfile();
+      GameState.npcs = NPC_DEFS.map((n) => ({ ...n, appearances: [] }));
       GameState.deck = buildInitialDeck();
       audio.sfx("click");
       this.cameras.main.fadeOut(500, 0, 0, 0);
-      this.cameras.main.once("camerafadeoutcomplete", () => this.scene.start("Combat"));
+      this.cameras.main.once("camerafadeoutcomplete", () => this.scene.start("Combat", { circleIdx: 0 }));
     }, 0x4a4a18, 180, 48);
 
     this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 28,

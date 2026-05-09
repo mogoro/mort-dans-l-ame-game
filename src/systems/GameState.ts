@@ -420,7 +420,40 @@ export function synthesizeCards(cardA: Card, cardB: Card): Card {
   };
 }
 
-// Reset à la fin d'une run (mais conserve persistants)
+// Snapshot de l'état de run (pour save complet)
+export function snapshotRun(resumeAt: "Life" | "DeckReveal" | "Combat" | "Outcome" | "Rest" | "Market") {
+  return {
+    resumeAt,
+    ts: Date.now(),
+    profile: { ...GameState.profile },
+    deck: GameState.deck.map((c) => ({ ...c })),
+    gold: GameState.gold,
+    debts: [...GameState.debts],
+    npcs: GameState.npcs.map((n) => ({ ...n })),
+    persistentChoices: [...GameState.persistentChoices],
+    circlePnjs: [...GameState.circlePnjs],
+    curses: [...GameState.curses],
+    currentCircle: GameState.currentCircle,
+    outcome: GameState.outcome,
+  };
+}
+
+// Restaure une run depuis un snapshot
+export function restoreRun(snap: any): void {
+  if (!snap) return;
+  if (snap.profile) GameState.profile = { ...GameState.profile, ...snap.profile };
+  if (snap.deck) GameState.deck = snap.deck;
+  if (typeof snap.gold === "number") GameState.gold = snap.gold;
+  if (snap.debts) GameState.debts = snap.debts;
+  if (snap.npcs) GameState.npcs = snap.npcs;
+  if (snap.persistentChoices) GameState.persistentChoices = snap.persistentChoices;
+  if (snap.circlePnjs) GameState.circlePnjs = snap.circlePnjs;
+  if (snap.curses) GameState.curses = snap.curses;
+  if (typeof snap.currentCircle === "number") GameState.currentCircle = snap.currentCircle;
+  if (snap.outcome) GameState.outcome = snap.outcome;
+}
+
+// Reset à la fin d'une run (mais conserve persistants : codex, talents, reliques, ngPlus, judgeMemory, imprint)
 export function resetForNewRun(): void {
   GameState.gold = 0;
   GameState.debts = [];
@@ -432,6 +465,13 @@ export function resetForNewRun(): void {
   GameState.outcome = undefined;
   GameState.combatStats = undefined;
   GameState.ending = null;
-  // Profile reset — mais NG+ peut les reprendre du cycle précédent
+  GameState.deck = [];
+  // Profile reset
   ALL_AXES.forEach((a) => { GameState.profile[a] = 50; });
+  // Clean run cache
+  delete (GameState as any).lastCombatCards;
+  delete (GameState as any).nextDrawBonus;
+  delete (GameState as any).nextCostDiscount;
+  delete (GameState as any).nextHpHeal;
+  delete (GameState as any).bonusRelicNextRun;
 }

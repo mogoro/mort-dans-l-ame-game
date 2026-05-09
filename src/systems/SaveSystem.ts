@@ -142,17 +142,55 @@ function checkAchievements(result: string, profile: Record<Axis, number>, score:
   return newly;
 }
 
-// Save/Load run en cours (7.1 — basique)
+// Save/Load run en cours — refonte complète : snapshot de tout le state de run
 const RUN_KEY = "mortdansl-current-run";
-export function saveCurrentRun(state: any): void {
-  try { localStorage.setItem(RUN_KEY, JSON.stringify(state)); } catch {}
+
+export interface RunSnapshot {
+  // Identité de run
+  resumeAt: "Life" | "DeckReveal" | "Combat" | "Outcome" | "Rest" | "Market";
+  ts: number;
+  // GameState à reprendre
+  profile: Record<string, number>;
+  deck: any[];
+  gold: number;
+  debts: any[];
+  npcs: any[];
+  persistentChoices: any[];
+  circlePnjs: any[];
+  curses: any[];
+  currentCircle: number;
+  outcome?: "victory" | "defeat";
 }
-export function loadCurrentRun(): any | null {
+
+function safeGet(key: string): string | null {
   try {
-    const raw = localStorage.getItem(RUN_KEY);
-    return raw ? JSON.parse(raw) : null;
+    if (typeof localStorage === "undefined") return null;
+    return localStorage.getItem(key);
   } catch { return null; }
 }
+function safeSet(key: string, value: string): void {
+  try {
+    if (typeof localStorage === "undefined") return;
+    localStorage.setItem(key, value);
+  } catch {}
+}
+function safeRemove(key: string): void {
+  try {
+    if (typeof localStorage === "undefined") return;
+    localStorage.removeItem(key);
+  } catch {}
+}
+
+export function saveCurrentRun(snapshot: RunSnapshot | any): void {
+  safeSet(RUN_KEY, JSON.stringify(snapshot));
+}
+
+export function loadCurrentRun(): RunSnapshot | null {
+  const raw = safeGet(RUN_KEY);
+  if (!raw) return null;
+  try { return JSON.parse(raw) as RunSnapshot; } catch { return null; }
+}
+
 export function clearCurrentRun(): void {
-  try { localStorage.removeItem(RUN_KEY); } catch {}
+  safeRemove(RUN_KEY);
 }

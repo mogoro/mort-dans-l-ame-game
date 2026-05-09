@@ -3,7 +3,7 @@ import { GAME_WIDTH, GAME_HEIGHT } from "../main";
 import { audio } from "../systems/AudioSystem";
 import { Settings, DEBUG } from "../systems/Settings";
 import { loadStats, loadCurrentRun, clearCurrentRun } from "../systems/SaveSystem";
-import { GameState } from "../systems/GameState";
+import { GameState, restoreRun } from "../systems/GameState";
 import { judgeRecallsLastRun } from "../systems/Judge";
 
 const VERSION = "0.3.0";
@@ -61,19 +61,32 @@ export class BootScene extends Phaser.Scene {
         color: "#6a5030", fontStyle: "italic", align: "center" }
     ).setOrigin(0.5);
 
-    this.createButton(cx, cy + 30, "Commencer une vie", () => {
+    const savedRun = loadCurrentRun();
+
+    this.createButton(cx, cy + 30, savedRun ? "Nouvelle vie" : "Commencer une vie", () => {
       audio.playPhase("ambient");
       clearCurrentRun();
       this.cameras.main.fadeOut(600, 0, 0, 0);
       this.cameras.main.once("camerafadeoutcomplete", () => this.scene.start("Character"));
     }, 0x6a3018);
 
-    const savedRun = loadCurrentRun();
-    if (savedRun) {
-      this.createButton(cx, cy + 90, "Reprendre la vie", () => {
+    if (savedRun && savedRun.resumeAt) {
+      const labels: Record<string, string> = {
+        Life: "Reprendre — Phase Vie",
+        DeckReveal: "Reprendre — Mort & deck",
+        Combat: `Reprendre — Cercle ${(savedRun.currentCircle || 0) + 1}`,
+        Outcome: "Reprendre — Résultat",
+        Rest: "Reprendre — Repos",
+        Market: "Reprendre — Marché",
+      };
+      const label = labels[savedRun.resumeAt] || "Reprendre la vie";
+      this.createButton(cx, cy + 90, label, () => {
         audio.playPhase("ambient");
+        restoreRun(savedRun);
         this.cameras.main.fadeOut(600, 0, 0, 0);
-        this.cameras.main.once("camerafadeoutcomplete", () => this.scene.start("Life"));
+        this.cameras.main.once("camerafadeoutcomplete", () => {
+          this.scene.start(savedRun.resumeAt);
+        });
       }, 0x4a3018);
     }
 

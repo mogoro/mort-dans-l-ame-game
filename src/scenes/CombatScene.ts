@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { GAME_WIDTH, GAME_HEIGHT } from "../main";
-import { GameState, getProfileNature, registerCardPlay } from "../systems/GameState";
+import { GameState, getProfileNature, registerCardPlay, snapshotRun } from "../systems/GameState";
+import { saveCurrentRun } from "../systems/SaveSystem";
 import { AXIS_COLOR, type Card, type Sigil, applyFatigue } from "../data/cards";
 import type { Axis } from "../data/events";
 import { CIRCLES, type CircleDef, type BossSpecial } from "../data/circles";
@@ -255,6 +256,9 @@ export class CombatScene extends Phaser.Scene {
 
     audio.playPhase("combat");
 
+    // Save snapshot pré-combat (permet reprise au début du combat)
+    saveCurrentRun(snapshotRun("Combat"));
+
     // F.5 — voice line basée sur profil
     const opener = judgeOpeningLine();
     this.setJudgeMessage(opener);
@@ -449,23 +453,46 @@ export class CombatScene extends Phaser.Scene {
       bg.setStrokeStyle(2, 0x8a5018, 0.4);
       const draggingFromHand = this.hand.length > 0 && (this as any).dragSourceIdx != null;
       if (isPlayer && draggingFromHand) {
-        bg.setStrokeStyle(2, 0xffcc66, 0.9);
+        bg.setStrokeStyle(3, 0xffcc66, 1);
+        bg.setFillStyle(0x4a3818, 0.5);
+        // Glow plus marqué autour de la zone (drop target)
+        const glow = this.add.graphics();
+        glow.lineStyle(4, 0xffd870, 0.4);
+        glow.strokeRect(-w / 2 - 4, -h / 2 - 4, w + 8, h + 8);
+        c.add(glow);
+        this.tweens.add({
+          targets: glow,
+          alpha: { from: 0.3, to: 1 },
+          duration: 500,
+          yoyo: true,
+          repeat: -1,
+        });
         this.tweens.add({
           targets: bg,
-          alpha: { from: 0.3, to: 0.7 },
+          alpha: { from: 0.4, to: 0.8 },
           duration: 700,
           yoyo: true,
           repeat: -1,
         });
-      }
-      c.add(bg);
-      if (isPlayer) {
-        c.add(this.add.text(0, 0, "vide", {
-          fontFamily: "Georgia, serif",
-          fontSize: "10px",
-          color: "#8a5018",
-          fontStyle: "italic",
+        // Indicateur "DÉPOSER ICI"
+        c.add(this.add.text(0, -10, "↓", {
+          fontFamily: "Georgia, serif", fontSize: "20px",
+          color: "#ffd870", fontStyle: "bold",
         }).setOrigin(0.5));
+        c.add(this.add.text(0, 14, "déposer", {
+          fontFamily: "Georgia, serif", fontSize: "9px",
+          color: "#ffd870", fontStyle: "italic",
+        }).setOrigin(0.5));
+      } else {
+        c.add(bg);
+        if (isPlayer) {
+          c.add(this.add.text(0, 0, "vide", {
+            fontFamily: "Georgia, serif",
+            fontSize: "10px",
+            color: "#8a5018",
+            fontStyle: "italic",
+          }).setOrigin(0.5));
+        }
       }
       return c;
     }
@@ -536,6 +563,38 @@ export class CombatScene extends Phaser.Scene {
     c.add(orn);
 
     if (card.sickness && !card.isBoss) bg.setAlpha(0.6);
+
+    // A.7 — consacrée : aura dorée
+    if (card.consecrated) {
+      const aura = this.add.graphics();
+      aura.lineStyle(2, 0xffd870, 0.7);
+      aura.strokeRect(-w / 2 - 2, -h / 2 - 2, w + 4, h + 4);
+      c.add(aura);
+      this.tweens.add({
+        targets: aura, alpha: { from: 0.4, to: 1 },
+        duration: 1200, yoyo: true, repeat: -1,
+      });
+    }
+    // G.5 — gardienne : aura bleue
+    if (card.isGuardian || (card.sigils || []).includes("guardian")) {
+      const aura = this.add.graphics();
+      aura.lineStyle(2, 0x80c0ff, 0.6);
+      aura.strokeRect(-w / 2 - 4, -h / 2 - 4, w + 8, h + 8);
+      c.add(aura);
+      this.tweens.add({
+        targets: aura, alpha: { from: 0.5, to: 1 },
+        duration: 1500, yoyo: true, repeat: -1,
+      });
+    }
+    // A.5 — fatiguée : indicateur rouge
+    if (card.fatigued) {
+      const fatigBg = this.add.rectangle(0, h / 2 - 10, w - 8, 12, 0x4a1010, 0.7);
+      c.add(fatigBg);
+      c.add(this.add.text(0, h / 2 - 10, "FATIGUÉE", {
+        fontFamily: "Georgia, serif", fontSize: "8px",
+        color: "#ff8080", fontStyle: "italic bold",
+      }).setOrigin(0.5));
+    }
 
     if (isPlayer && this.pendingSummon != null && !card.isBoss) {
       bg.setStrokeStyle(3, 0xff8888);
@@ -984,6 +1043,127 @@ export class CombatScene extends Phaser.Scene {
         fontFamily: "monospace", fontSize: "10px", color: "#88e0a0",
       }));
     }
+
+    // B.2 — affichage des synergies actives
+    const axisCount: Record<string, number> = {};
+    this.playerBoard.forEach((s) => {
+      if (s.card && !s.card.isBoss) {
+        axisCount[s.card.axis] = (axisCount[s.card.axis] || 0) + 1;
+      }
+    });
+    const synergies = Object.entries(axisCount).filter(([, c]) => c >= 3);
+    if (synergies.length > 0) {
+      const synY = 410;
+      const synBg = this.add.rectangle(GAME_WIDTH / 2, synY, 200, 18, 0x1a4028, 0.85);
+      synBg.setStrokeStyle(1, 0x88e0a0);
+      this.hudContainer.add(synBg);
+      this.hudContainer.add(this.add.text(GAME_WIDTH / 2, synY,
+        `✦ Synergie: ${synergies.map(([a]) => a).join(" + ")}`,
+        {
+          fontFamily: "Georgia, serif", fontSize: "9px",
+          color: "#88e0a0", fontStyle: "italic bold",
+        }
+      ).setOrigin(0.5));
+    }
+
+    // Bouton Légende (i) en haut-gauche
+    const legendBtn = this.add.container(20, 175);
+    const lBg = this.add.circle(0, 0, 12, 0x2a1810, 0.95);
+    lBg.setStrokeStyle(1, 0xa87a3a);
+    legendBtn.add(lBg);
+    legendBtn.add(this.add.text(0, 0, "?", {
+      fontFamily: "Georgia, serif", fontSize: "12px",
+      color: "#a87a3a", fontStyle: "bold",
+    }).setOrigin(0.5));
+    lBg.setInteractive({ useHandCursor: true });
+    lBg.on("pointerdown", () => this.showLegend());
+    this.hudContainer.add(legendBtn);
+  }
+
+  // Légende combat (statuts + sigils)
+  private legendOverlay?: Phaser.GameObjects.Container;
+  private showLegend(): void {
+    if (this.legendOverlay) {
+      this.legendOverlay.destroy();
+      this.legendOverlay = undefined;
+      return;
+    }
+    this.legendOverlay = this.add.container(0, 0);
+    this.legendOverlay.setDepth(6000);
+
+    const dim = this.add.rectangle(GAME_WIDTH / 2, GAME_HEIGHT / 2, GAME_WIDTH, GAME_HEIGHT, 0x000000, 0.92);
+    dim.setInteractive();
+    dim.on("pointerdown", () => {
+      this.legendOverlay?.destroy();
+      this.legendOverlay = undefined;
+    });
+    this.legendOverlay.add(dim);
+
+    this.legendOverlay.add(this.add.text(GAME_WIDTH / 2, 60, "LÉGENDE", {
+      fontFamily: "Georgia, serif", fontSize: "22px",
+      color: "#d4a040", fontStyle: "bold italic",
+    }).setOrigin(0.5));
+
+    const sections: Array<{ title: string; entries: string[] }> = [
+      {
+        title: "STATUTS",
+        entries: [
+          "🩸 Saignement : -1 HP/tour pendant N tours",
+          "🛡 Bloc : absorbe les dégâts avant HP",
+          "🧪 Toxique : -X HP/tour",
+          "❄ Glacé : saute son prochain tour",
+          "⬇ Faible : -25% ATK",
+          "⬆ Fort : +25% ATK",
+          "✦ Vulnérable : +50% dégâts reçus",
+        ],
+      },
+      {
+        title: "SIGILS DE CARTE",
+        entries: [
+          "⚡ Rapide : peut attaquer le tour de pose",
+          "🛡 Bouclier : +2 bloc tour de pose",
+          "🩸 Saignée : applique Saignement",
+          "🦇 Vampire : récupère HP par dégât infligé",
+          "🪤 Embuscade : carte face cachée, contre-attaque",
+          "🎶 Cantique : rejouable gratis si survit",
+          "🪬 Mue : devient Spectre à la mort",
+          "💎 Gardienne : indestructible",
+          "🧪 Toxique : applique Poison",
+          "❄ Glace : applique Glacé",
+          "🔥 Brûlure : brûle l'attaquant",
+        ],
+      },
+      {
+        title: "SYNERGIES",
+        entries: [
+          "3 cartes du même axe sur le board → +1 ATK chacune",
+          "Cartes du Cercle de Combat → bonus contextuels",
+        ],
+      },
+    ];
+
+    let y = 110;
+    sections.forEach((sec) => {
+      this.legendOverlay?.add(this.add.text(GAME_WIDTH / 2, y, sec.title, {
+        fontFamily: "Georgia, serif", fontSize: "13px",
+        color: "#ffd870", fontStyle: "bold",
+      }).setOrigin(0.5));
+      y += 22;
+      sec.entries.forEach((e) => {
+        this.legendOverlay?.add(this.add.text(GAME_WIDTH / 2, y, e, {
+          fontFamily: "Georgia, serif", fontSize: "11px",
+          color: "#f0d8b0",
+          align: "center", wordWrap: { width: GAME_WIDTH - 40 },
+        }).setOrigin(0.5));
+        y += 16;
+      });
+      y += 10;
+    });
+
+    this.legendOverlay.add(this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 30, "Touche pour fermer", {
+      fontFamily: "Georgia, serif", fontSize: "11px",
+      color: "#a87a3a", fontStyle: "italic",
+    }).setOrigin(0.5));
   }
 
   // ============================================================================
@@ -1139,6 +1319,7 @@ export class CombatScene extends Phaser.Scene {
     // G.5 gardienne ne peut être sacrifiée
     if ((sacrificed.sigils || []).includes("guardian")) {
       this.setJudgeMessage("La carte gardienne refuse d'être sacrifiée.");
+      this.flashFlying("PROTÉGÉE", GAME_WIDTH / 2, 460, "#80c0ff");
       return;
     }
     this.cardsSacrificed++;
@@ -1151,9 +1332,14 @@ export class CombatScene extends Phaser.Scene {
     const totalW = 4 * slotW + 3 * 8;
     const startX = (GAME_WIDTH - totalW) / 2 + slotW / 2;
     const sx = startX + sacrificeZoneIdx * (slotW + 8);
-    this.spawnBlood(sx, playerY, 20);
+    // Anim de sacrifice : large explosion sang + flash
+    this.spawnBlood(sx, playerY, 30);
+    this.spawnBlood(sx + 20, playerY - 10, 15);
+    this.spawnBlood(sx - 20, playerY - 10, 15);
     audio.sfx("card_destroy");
-    this.cameraShake(0.005, 200);
+    this.cameraShake(0.008, 350);
+    vibrate([30, 20, 30]);
+    this.flashFlying(`+${refund} ${sacrificed.axis}`, sx, playerY - 30, "#ffd870");
 
     // A.9 — pacted return ? La carte sacrifiée reviendra plus tard avec +ATK
     if (Math.random() < 0.2) {
