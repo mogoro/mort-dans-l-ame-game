@@ -1,7 +1,7 @@
 // A.1 — coût narratif : certaines cartes coûtent un PNJ allié, un souvenir, un trait du profil
-import { GameState, type NPC } from "./GameState";
+import { GameState } from "./GameState";
 import type { Card } from "../data/cards";
-import type { Axis } from "../data/events";
+
 
 export interface NarrativeCostPayment {
   paid: boolean;

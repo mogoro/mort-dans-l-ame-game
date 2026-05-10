@@ -3,7 +3,6 @@
 import Phaser from "phaser";
 import { GAME_WIDTH, GAME_HEIGHT } from "../main";
 import { GameState, type NPC } from "../systems/GameState";
-import { CIRCLES } from "../data/circles";
 import { audio } from "../systems/AudioSystem";
 import type { Axis } from "../data/events";
 

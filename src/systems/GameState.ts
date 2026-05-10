@@ -1,7 +1,7 @@
 // Singleton GameState — partagé entre les scènes
 import { ALL_AXES, type Axis } from "../data/events";
 import type { Card } from "../data/cards";
-import { CARD_POOL, applyCardLevel, applyFatigue } from "../data/cards";
+import { CARD_POOL, applyCardLevel} from "../data/cards";
 
 interface CharacterConfig {
   style: string;       // DiceBear style : personas / lorelei-neutral / pixel-art / miniavs

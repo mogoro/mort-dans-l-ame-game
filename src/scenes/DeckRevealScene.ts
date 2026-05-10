@@ -5,7 +5,7 @@ import Phaser from "phaser";
 import { GAME_WIDTH, GAME_HEIGHT } from "../main";
 import { GameState, buildInitialDeck, snapshotRun } from "../systems/GameState";
 import { AXIS_COLOR, CARD_POOL, type Card, consecrate } from "../data/cards";
-import { ALL_AXES, type Axis } from "../data/events";
+import { type Axis } from "../data/events";
 import { audio } from "../systems/AudioSystem";
 import { hasRelic } from "../systems/Relics";
 import { saveCurrentRun } from "../systems/SaveSystem";

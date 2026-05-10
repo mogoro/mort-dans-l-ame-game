@@ -2,7 +2,7 @@
 import Phaser from "phaser";
 import { GAME_WIDTH, GAME_HEIGHT } from "../main";
 import { GameState, pactDuConteur } from "../systems/GameState";
-import { ALL_AXES, type Axis } from "../data/events";
+import { type Axis } from "../data/events";
 import { audio } from "../systems/AudioSystem";
 
 export class PacteConteurScene extends Phaser.Scene {

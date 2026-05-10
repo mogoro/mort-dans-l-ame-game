@@ -5,7 +5,7 @@
 import Phaser from "phaser";
 import { GAME_WIDTH, GAME_HEIGHT } from "../main";
 import { GameState, snapshotRun } from "../systems/GameState";
-import { rollMarketOffers, type MarketOffer, CURSE_OPTIONS, addDebt } from "../systems/Economy";
+import { rollMarketOffers, type MarketOffer, CURSE_OPTIONS } from "../systems/Economy";
 import { audio } from "../systems/AudioSystem";
 import { CARD_POOL } from "../data/cards";
 import type { Axis } from "../data/events";
