@@ -76,7 +76,7 @@ export class CharacterScene extends Phaser.Scene {
 
     this.add.text(GAME_WIDTH / 2, 80, "Avant de naître", {
       fontFamily: "Georgia, serif",
-      fontSize: "12px",
+      fontSize: "14px",
       color: "#a87a3a",
       fontStyle: "italic",
     }).setOrigin(0.5);
@@ -106,7 +106,7 @@ export class CharacterScene extends Phaser.Scene {
 
     this.avatarLoadingText = this.add.text(GAME_WIDTH / 2, frameY, "...", {
       fontFamily: "monospace",
-      fontSize: "16px",
+      fontSize: "18px",
       color: "#d4a040",
     }).setOrigin(0.5);
 
@@ -162,8 +162,8 @@ export class CharacterScene extends Phaser.Scene {
       "Médium = test rapide (profil neutre, deck équilibré)",
       {
         fontFamily: "Georgia, serif",
-        fontSize: "10px",
-        color: "#806040",
+        fontSize: "13px",
+        color: "#b89060",
         fontStyle: "italic",
       }
     ).setOrigin(0.5);
@@ -171,7 +171,7 @@ export class CharacterScene extends Phaser.Scene {
     // Bouton retour
     const back = this.add.text(20, 25, "← Retour", {
       fontFamily: "Georgia, serif",
-      fontSize: "13px",
+      fontSize: "15px",
       color: "#a87a3a",
     });
     back.setInteractive({ useHandCursor: true });
@@ -208,7 +208,7 @@ export class CharacterScene extends Phaser.Scene {
   private addOptionRow(y: number, label: string, ids: string[], labels: string[], current: string, onPick: (id: string) => void): number {
     this.add.text(GAME_WIDTH / 2, y, label, {
       fontFamily: "Georgia, serif",
-      fontSize: "11px",
+      fontSize: "14px",
       color: "#a87a3a",
     }).setOrigin(0.5);
     const segW = 90;
@@ -222,7 +222,7 @@ export class CharacterScene extends Phaser.Scene {
       r.setInteractive({ useHandCursor: true });
       this.add.text(x, y + 22, labels[i], {
         fontFamily: "Georgia, serif",
-        fontSize: "10px",
+        fontSize: "13px",
         color: isActive ? "#fff5dc" : "#a87a3a",
       }).setOrigin(0.5);
       r.on("pointerdown", () => {
@@ -237,7 +237,7 @@ export class CharacterScene extends Phaser.Scene {
   private addColorRow(y: number, label: string, colors: { hex: string; name: string }[], current: string, onPick: (hex: string) => void): number {
     this.add.text(GAME_WIDTH / 2, y, label, {
       fontFamily: "Georgia, serif",
-      fontSize: "11px",
+      fontSize: "14px",
       color: "#a87a3a",
     }).setOrigin(0.5);
     const sw = 24;
@@ -265,7 +265,7 @@ export class CharacterScene extends Phaser.Scene {
     c.add(bg);
     c.add(this.add.text(0, 0, label, {
       fontFamily: "Georgia, serif",
-      fontSize: "14px",
+      fontSize: "16px",
       color: "#f0d8b0",
       fontStyle: "bold",
     }).setOrigin(0.5));

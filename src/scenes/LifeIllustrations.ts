@@ -410,14 +410,14 @@ function drawBedroom(scene: Phaser.Scene, container: Phaser.GameObjects.Containe
   });
 
   // Tableau au mur (cœur)
-  container.add(scene.add.text(w / 3, -h / 3, "💕", { fontSize: "16px" }).setOrigin(0.5));
+  container.add(scene.add.text(w / 3, -h / 3, "💕", { fontSize: "18px" }).setOrigin(0.5));
 
   // Particules d'amour
   for (let i = 0; i < 4; i++) {
     const p = scene.add.text(
       Phaser.Math.Between(-w / 2 + 10, w / 2 - 10),
       Phaser.Math.Between(-h / 2, 0),
-      "✨", { fontSize: "10px" }
+      "✨", { fontSize: "13px" }
     );
     container.add(p);
     scene.tweens.add({

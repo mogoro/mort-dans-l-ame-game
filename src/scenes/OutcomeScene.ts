@@ -15,7 +15,7 @@ export class OutcomeScene extends Phaser.Scene {
   constructor() { super("Outcome"); }
 
   create(): void {
-    this.cameras.main.fadeIn(800, 0, 0, 0);
+    this.cameras.main.fadeIn(400, 0, 0, 0);
     const isVictory = GameState.outcome === "victory";
     const stats = GameState.combatStats || { turns: 1, cardsSacrificed: 0, axesRemaining: 0 };
     const circleIdx = GameState.currentCircle;
@@ -123,10 +123,10 @@ export class OutcomeScene extends Phaser.Scene {
     ];
     statLines.forEach(([label, val], i) => {
       const t1 = this.add.text(cx - 100, y + i * 22, String(label), {
-        fontFamily: "Georgia, serif", fontSize: "13px", color: "#a87a3a",
+        fontFamily: "Georgia, serif", fontSize: "15px", color: "#a87a3a",
       }).setAlpha(0);
       const t2 = this.add.text(cx + 100, y + i * 22, String(val), {
-        fontFamily: "monospace", fontSize: "14px",
+        fontFamily: "monospace", fontSize: "16px",
         color: "#f0d8b0", fontStyle: "bold",
       }).setOrigin(1, 0).setAlpha(0);
       this.tweens.add({ targets: [t1, t2], alpha: 1, duration: 500, delay: 1500 + i * 200 });
@@ -134,8 +134,8 @@ export class OutcomeScene extends Phaser.Scene {
 
     y = 460;
     const scoreLabel = this.add.text(cx, y, "SCORE", {
-      fontFamily: "Georgia, serif", fontSize: "12px",
-      color: "#806040", fontStyle: "italic",
+      fontFamily: "Georgia, serif", fontSize: "14px",
+      color: "#b89060", fontStyle: "italic",
     }).setOrigin(0.5).setAlpha(0);
     const scoreText = this.add.text(cx, y + 24, "0", {
       fontFamily: "monospace", fontSize: "44px",
@@ -158,7 +158,7 @@ export class OutcomeScene extends Phaser.Scene {
     if (isRunOver) {
       // Run terminée → Ending screen
       this.createButton(cx, btnY, isVictory ? "Verdict final →" : "Verdict →", () => {
-        this.cameras.main.fadeOut(800, 0, 0, 0);
+        this.cameras.main.fadeOut(400, 0, 0, 0);
         this.cameras.main.once("camerafadeoutcomplete", () => this.scene.start("Ending"));
       }, isVictory ? 0xa07020 : 0x6a3018);
     } else {
@@ -181,12 +181,12 @@ export class OutcomeScene extends Phaser.Scene {
       .slice(0, 3);
     y = 660;
     this.add.text(cx, y, "Ce que tu es devenu", {
-      fontFamily: "Georgia, serif", fontSize: "11px",
-      color: "#806040", fontStyle: "italic",
+      fontFamily: "Georgia, serif", fontSize: "14px",
+      color: "#b89060", fontStyle: "italic",
     }).setOrigin(0.5);
     sortedAxes.forEach(([axis, val], i) => {
       this.add.text(cx, y + 22 + i * 18, `${axis}  ${val}`, {
-        fontFamily: "monospace", fontSize: "11px", color: "#a87a3a",
+        fontFamily: "monospace", fontSize: "14px", color: "#a87a3a",
       }).setOrigin(0.5);
     });
   }
@@ -207,7 +207,7 @@ export class OutcomeScene extends Phaser.Scene {
     bg.setStrokeStyle(2, 0xd4a040);
     c.add(bg);
     c.add(this.add.text(0, 0, label, {
-      fontFamily: "Georgia, serif", fontSize: "14px",
+      fontFamily: "Georgia, serif", fontSize: "16px",
       color: "#f0d8b0", fontStyle: "bold",
     }).setOrigin(0.5));
     bg.setInteractive({ useHandCursor: true });

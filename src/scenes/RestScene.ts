@@ -24,7 +24,7 @@ export class RestScene extends Phaser.Scene {
     }).setOrigin(0.5);
 
     this.add.text(GAME_WIDTH / 2, 130, "Choisis un axe à dépenser pour récupérer.", {
-      fontFamily: "Georgia, serif", fontSize: "13px",
+      fontFamily: "Georgia, serif", fontSize: "15px",
       color: "#80a0b0", fontStyle: "italic",
       wordWrap: { width: GAME_WIDTH - 60 }, align: "center",
     }).setOrigin(0.5);
@@ -45,8 +45,8 @@ export class RestScene extends Phaser.Scene {
     bgB.setStrokeStyle(2, 0x666666);
     btn.add(bgB);
     btn.add(this.add.text(0, 0, "Continuer sans repos", {
-      fontFamily: "Georgia, serif", fontSize: "14px",
-      color: "#a0a0a0", fontStyle: "italic",
+      fontFamily: "Georgia, serif", fontSize: "16px",
+      color: "#c0c0c0", fontStyle: "italic",
     }).setOrigin(0.5));
     bgB.setInteractive({ useHandCursor: true });
     bgB.on("pointerdown", () => {
@@ -61,15 +61,15 @@ export class RestScene extends Phaser.Scene {
     bg.setStrokeStyle(2, 0x4080a0);
     c.add(bg);
     c.add(this.add.text(-200, 0, axis, {
-      fontFamily: "Georgia, serif", fontSize: "14px",
+      fontFamily: "Georgia, serif", fontSize: "16px",
       color: "#a0c0e0", fontStyle: "bold",
     }).setOrigin(0, 0.5));
     c.add(this.add.text(0, 0, `${val} → ${val - 8}`, {
-      fontFamily: "monospace", fontSize: "13px",
+      fontFamily: "monospace", fontSize: "15px",
       color: "#80a0c0",
     }).setOrigin(0.5));
     c.add(this.add.text(180, 0, "+50% HP", {
-      fontFamily: "Georgia, serif", fontSize: "12px",
+      fontFamily: "Georgia, serif", fontSize: "14px",
       color: "#80c0a0", fontStyle: "italic",
     }).setOrigin(1, 0.5));
 

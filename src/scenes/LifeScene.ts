@@ -75,7 +75,7 @@ export class LifeScene extends Phaser.Scene {
     }
 
     const code = this.add.text(GAME_WIDTH / 2, 120, evt.code, {
-      fontFamily: "monospace", fontSize: "11px", color: "#806040",
+      fontFamily: "monospace", fontSize: "14px", color: "#b89060",
     }).setOrigin(0.5);
     this.container.add(code);
 
@@ -83,7 +83,7 @@ export class LifeScene extends Phaser.Scene {
     if (evt.timeoutSec) {
       this.timeLeft = evt.timeoutSec;
       this.timerText = this.add.text(GAME_WIDTH - 20, 60, `${this.timeLeft}s`, {
-        fontFamily: "monospace", fontSize: "16px",
+        fontFamily: "monospace", fontSize: "18px",
         color: "#ff8080", fontStyle: "bold",
       }).setOrigin(1, 0.5);
       this.container.add(this.timerText);
@@ -108,7 +108,7 @@ export class LifeScene extends Phaser.Scene {
     this.tweens.add({ targets: illustContainer, alpha: 1, duration: 700 });
 
     const trame = this.add.text(GAME_WIDTH / 2, illustY + illustH / 2 + 20, evt.trame, {
-      fontFamily: "Georgia, serif", fontSize: "16px",
+      fontFamily: "Georgia, serif", fontSize: "18px",
       color: "#f0d8b0", fontStyle: "italic",
       align: "center", wordWrap: { width: GAME_WIDTH - 60 },
     }).setOrigin(0.5, 0);
@@ -126,9 +126,10 @@ export class LifeScene extends Phaser.Scene {
       return true;
     });
 
+    // Boutons options aérés : hauteur min 78px (>44 confort), gap proportionnel
     const optionsStartY = trame.y + trame.height + 40;
-    const buttonHeight = visibleOptions.length > 4 ? 60 : 76;
-    const buttonGap = visibleOptions.length > 4 ? 70 : 90;
+    const buttonHeight = visibleOptions.length > 4 ? 64 : 84;
+    const buttonGap = visibleOptions.length > 4 ? 76 : 96;
 
     visibleOptions.forEach((opt, idx) => {
       const y = optionsStartY + idx * buttonGap;
@@ -170,7 +171,7 @@ export class LifeScene extends Phaser.Scene {
     c.add(bg);
 
     const t = this.add.text(0, 0, text, {
-      fontFamily: "Georgia, serif", fontSize: "14px",
+      fontFamily: "Georgia, serif", fontSize: "16px",
       color: "#f0d8b0", align: "center",
       wordWrap: { width: GAME_WIDTH - 90 },
     }).setOrigin(0.5);
@@ -178,7 +179,7 @@ export class LifeScene extends Phaser.Scene {
 
     if (isConditional) {
       c.add(this.add.text(0, height / 2 - 10, "★ trait acquis", {
-        fontFamily: "Georgia, serif", fontSize: "9px",
+        fontFamily: "Georgia, serif", fontSize: "12px",
         color: "#d4a040", fontStyle: "italic",
       }).setOrigin(0.5, 1));
     }
@@ -253,7 +254,7 @@ export class LifeScene extends Phaser.Scene {
       this.currentEventIdx++;
       if (this.currentEventIdx >= this.lifeEvents.length) {
         // Fin de phase Vie → DeckReveal (avec lettre si trigger)
-        this.cameras.main.fadeOut(800, 0, 0, 0);
+        this.cameras.main.fadeOut(400, 0, 0, 0);
         this.cameras.main.once("camerafadeoutcomplete", () => {
           if (letter) {
             this.scene.start("Letter", { text: letter, nextScene: "DeckReveal" });
@@ -295,7 +296,7 @@ export class LifeScene extends Phaser.Scene {
     t.setRotation(-0.02);
     overlay.add(t);
     overlay.add(this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 100, "Touche pour continuer", {
-      fontFamily: "Georgia, serif", fontSize: "11px",
+      fontFamily: "Georgia, serif", fontSize: "14px",
       color: "#a87a3a", fontStyle: "italic",
     }).setOrigin(0.5));
 

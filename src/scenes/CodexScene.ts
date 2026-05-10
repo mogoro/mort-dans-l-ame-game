@@ -28,12 +28,12 @@ export class CodexScene extends Phaser.Scene {
     }).setOrigin(0.5);
 
     this.add.text(GAME_WIDTH / 2, 80, `${this.pages.length} / 100 pages`, {
-      fontFamily: "monospace", fontSize: "12px", color: "#a87a3a",
+      fontFamily: "monospace", fontSize: "14px", color: "#a87a3a",
     }).setOrigin(0.5);
 
     if (this.pages.length === 0) {
       this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2, "Aucune page écrite.\nGagne pour révéler tes vies passées.", {
-        fontFamily: "Georgia, serif", fontSize: "14px",
+        fontFamily: "Georgia, serif", fontSize: "16px",
         color: "#a87a3a", fontStyle: "italic", align: "center",
       }).setOrigin(0.5);
     } else {
@@ -44,12 +44,12 @@ export class CodexScene extends Phaser.Scene {
         align: "center", wordWrap: { width: GAME_WIDTH - 60 },
       }).setOrigin(0.5);
       this.add.text(GAME_WIDTH / 2, 280, page.body, {
-        fontFamily: "Georgia, serif", fontSize: "14px",
+        fontFamily: "Georgia, serif", fontSize: "16px",
         color: "#f0d8b0", fontStyle: "italic",
         align: "center", wordWrap: { width: GAME_WIDTH - 80 },
       }).setOrigin(0.5);
       this.add.text(GAME_WIDTH / 2, 500, `Page ${this.currentPage + 1} / ${this.pages.length}`, {
-        fontFamily: "monospace", fontSize: "11px", color: "#666666",
+        fontFamily: "monospace", fontSize: "14px", color: "#c0c0c0",
       }).setOrigin(0.5);
 
       // Nav
@@ -75,7 +75,7 @@ export class CodexScene extends Phaser.Scene {
     bgB.setStrokeStyle(2, 0x88a040);
     back.add(bgB);
     back.add(this.add.text(0, 0, "Retour", {
-      fontFamily: "Georgia, serif", fontSize: "14px", color: "#88a040", fontStyle: "italic",
+      fontFamily: "Georgia, serif", fontSize: "16px", color: "#88a040", fontStyle: "italic",
     }).setOrigin(0.5));
     bgB.setInteractive({ useHandCursor: true });
     bgB.on("pointerdown", () => {

@@ -29,7 +29,7 @@ export class MenuScene extends Phaser.Scene {
     // Bouton retour
     const back = this.add.text(20, 25, "← Retour", {
       fontFamily: "Georgia, serif",
-      fontSize: "14px",
+      fontSize: "16px",
       color: "#a87a3a",
     });
     back.setInteractive({ useHandCursor: true });
@@ -46,7 +46,7 @@ export class MenuScene extends Phaser.Scene {
       const x = (GAME_WIDTH / 3) * (i + 0.5);
       const t = this.add.text(x, 100, tab.toUpperCase(), {
         fontFamily: "Georgia, serif",
-        fontSize: "13px",
+        fontSize: "15px",
         color: this.currentTab === tab ? "#d4a040" : "#806040",
         fontStyle: this.currentTab === tab ? "bold" : "normal",
       }).setOrigin(0.5);
@@ -113,7 +113,7 @@ export class MenuScene extends Phaser.Scene {
   private addToggle(y: number, label: string, value: boolean, onChange: (v: boolean) => void): number {
     this.add.text(40, y, label, {
       fontFamily: "Georgia, serif",
-      fontSize: "13px",
+      fontSize: "15px",
       color: "#f0d8b0",
     });
     const toggle = this.add.rectangle(GAME_WIDTH - 70, y + 7, 50, 20, value ? 0x6a8040 : 0x4a2820);
@@ -130,7 +130,7 @@ export class MenuScene extends Phaser.Scene {
   private addSelector(y: number, label: string, options: string[], value: string, onChange: (v: string) => void): number {
     this.add.text(40, y, label, {
       fontFamily: "Georgia, serif",
-      fontSize: "13px",
+      fontSize: "15px",
       color: "#f0d8b0",
     });
     const totalW = 200;
@@ -143,7 +143,7 @@ export class MenuScene extends Phaser.Scene {
       r.setInteractive({ useHandCursor: true });
       const t = this.add.text(x + segW / 2, y + 7, opt, {
         fontFamily: "Georgia, serif",
-        fontSize: "10px",
+        fontSize: "13px",
         color: isActive ? "#fff5dc" : "#a87a3a",
         fontStyle: isActive ? "bold" : "normal",
       }).setOrigin(0.5);
@@ -158,7 +158,7 @@ export class MenuScene extends Phaser.Scene {
   private addSlider(y: number, label: string, value: number, onChange: (v: number) => void): number {
     this.add.text(40, y, label, {
       fontFamily: "Georgia, serif",
-      fontSize: "13px",
+      fontSize: "15px",
       color: "#f0d8b0",
     });
     const sliderX = GAME_WIDTH - 200;
@@ -170,7 +170,7 @@ export class MenuScene extends Phaser.Scene {
 
     const valLabel = this.add.text(GAME_WIDTH - 30, y + 7, `${Math.round(value * 100)}%`, {
       fontFamily: "monospace",
-      fontSize: "11px",
+      fontSize: "14px",
       color: "#d4a040",
     }).setOrigin(1, 0.5);
 
@@ -201,10 +201,10 @@ export class MenuScene extends Phaser.Scene {
       ["Meilleur score", stats.bestScore],
     ];
     lines.forEach(([label, val]) => {
-      this.add.text(40, y, String(label), { fontFamily: "Georgia, serif", fontSize: "14px", color: "#f0d8b0" });
+      this.add.text(40, y, String(label), { fontFamily: "Georgia, serif", fontSize: "16px", color: "#f0d8b0" });
       this.add.text(GAME_WIDTH - 40, y, String(val), {
         fontFamily: "monospace",
-        fontSize: "16px",
+        fontSize: "18px",
         color: "#d4a040",
         fontStyle: "bold",
       }).setOrigin(1, 0);
@@ -214,16 +214,16 @@ export class MenuScene extends Phaser.Scene {
     if (Object.keys(stats.axesCumulated).length > 0) {
       this.add.text(40, y + 16, "Axes accumulés (lifetime)", {
         fontFamily: "Georgia, serif",
-        fontSize: "12px",
+        fontSize: "14px",
         color: "#a87a3a",
       });
       y += 40;
       const sorted = Object.entries(stats.axesCumulated).sort((a, b) => b[1] - a[1]);
       sorted.slice(0, 5).forEach(([axis, val]) => {
-        this.add.text(50, y, `${axis}`, { fontFamily: "monospace", fontSize: "11px", color: "#f0d8b0" });
+        this.add.text(50, y, `${axis}`, { fontFamily: "monospace", fontSize: "14px", color: "#f0d8b0" });
         this.add.text(GAME_WIDTH - 40, y, String(val), {
           fontFamily: "monospace",
-          fontSize: "11px",
+          fontSize: "14px",
           color: "#d4a040",
         }).setOrigin(1, 0);
         y += 18;
@@ -240,7 +240,7 @@ export class MenuScene extends Phaser.Scene {
 
     this.add.text(GAME_WIDTH / 2, y, `${unlocked} / ${list.length} débloqués`, {
       fontFamily: "Georgia, serif",
-      fontSize: "13px",
+      fontSize: "15px",
       color: "#a87a3a",
     }).setOrigin(0.5);
     y += 30;
@@ -249,18 +249,18 @@ export class MenuScene extends Phaser.Scene {
       const c = a.unlocked ? "#d4a040" : "#5a4030";
       this.add.text(40, y, a.unlocked ? "★" : "☆", {
         fontFamily: "Georgia, serif",
-        fontSize: "16px",
+        fontSize: "18px",
         color: c,
       });
       this.add.text(70, y, a.name, {
         fontFamily: "Georgia, serif",
-        fontSize: "13px",
+        fontSize: "15px",
         color: c,
         fontStyle: a.unlocked ? "bold" : "normal",
       });
       this.add.text(70, y + 16, a.description, {
         fontFamily: "Georgia, serif",
-        fontSize: "10px",
+        fontSize: "13px",
         color: a.unlocked ? "#a87a3a" : "#4a3020",
         fontStyle: "italic",
       });

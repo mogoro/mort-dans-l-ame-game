@@ -15,7 +15,7 @@ export class LetterScene extends Phaser.Scene {
   }
 
   create(): void {
-    this.cameras.main.fadeIn(700, 0, 0, 0);
+    this.cameras.main.fadeIn(400, 0, 0, 0);
 
     const bg = this.add.graphics();
     bg.fillGradientStyle(0x1a0a06, 0x1a0a06, 0x2a1408, 0x2a1408, 1);
@@ -27,14 +27,14 @@ export class LetterScene extends Phaser.Scene {
     paper.setRotation(-0.02);
 
     const t = this.add.text(GAME_WIDTH / 2, GAME_HEIGHT / 2, this.text, {
-      fontFamily: "Georgia, serif", fontSize: "16px",
+      fontFamily: "Georgia, serif", fontSize: "18px",
       color: "#3a2810", fontStyle: "italic",
       align: "center", wordWrap: { width: GAME_WIDTH - 130 },
     }).setOrigin(0.5);
     t.setRotation(-0.02);
 
     this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 100, "Touche pour continuer", {
-      fontFamily: "Georgia, serif", fontSize: "11px", color: "#a87a3a", fontStyle: "italic",
+      fontFamily: "Georgia, serif", fontSize: "14px", color: "#a87a3a", fontStyle: "italic",
     }).setOrigin(0.5);
 
     this.input.once("pointerdown", () => {

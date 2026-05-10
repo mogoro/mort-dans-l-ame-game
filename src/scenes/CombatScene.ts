@@ -134,7 +134,7 @@ export class CombatScene extends Phaser.Scene {
   }
 
   create(data?: { circleIdx?: number; isElite?: boolean }): void {
-    this.cameras.main.fadeIn(800, 0, 0, 0);
+    this.cameras.main.fadeIn(400, 0, 0, 0);
 
     const circleIdx = data?.circleIdx ?? GameState.currentCircle ?? 0;
     this.isElite = !!data?.isElite;
@@ -411,7 +411,7 @@ export class CombatScene extends Phaser.Scene {
     this.boardContainer.add(bubbleBg);
     this.judgeBubble = this.add.text(130, judgeY - 8, "", {
       fontFamily: "Georgia, serif",
-      fontSize: "11px",
+      fontSize: "14px",
       color: "#f0d8b0",
       fontStyle: "italic",
       wordWrap: { width: GAME_WIDTH - 160 },
@@ -432,7 +432,7 @@ export class CombatScene extends Phaser.Scene {
     const phaseTag = this.bossPhase === 2 ? "  · ENRAGÉ" : "";
     const banner = this.add.text(GAME_WIDTH / 2, 360, `— TOUR ${this.turn} ${this.pendingSummon ? "· SACRIFICE" : "· TA PHASE"}${phaseTag} —`, {
       fontFamily: "Georgia, serif",
-      fontSize: "11px",
+      fontSize: "14px",
       color: this.pendingSummon ? "#ff8888" : (this.bossPhase === 2 ? "#ff4040" : "#a87a3a"),
       fontStyle: "italic",
     }).setOrigin(0.5);
@@ -480,7 +480,7 @@ export class CombatScene extends Phaser.Scene {
           color: "#ffd870", fontStyle: "bold",
         }).setOrigin(0.5));
         c.add(this.add.text(0, 14, "déposer", {
-          fontFamily: "Georgia, serif", fontSize: "9px",
+          fontFamily: "Georgia, serif", fontSize: "12px",
           color: "#ffd870", fontStyle: "italic",
         }).setOrigin(0.5));
       } else {
@@ -488,7 +488,7 @@ export class CombatScene extends Phaser.Scene {
         if (isPlayer) {
           c.add(this.add.text(0, 0, "vide", {
             fontFamily: "Georgia, serif",
-            fontSize: "10px",
+            fontSize: "13px",
             color: "#8a5018",
             fontStyle: "italic",
           }).setOrigin(0.5));
@@ -591,7 +591,7 @@ export class CombatScene extends Phaser.Scene {
       const fatigBg = this.add.rectangle(0, h / 2 - 10, w - 8, 12, 0x4a1010, 0.7);
       c.add(fatigBg);
       c.add(this.add.text(0, h / 2 - 10, "FATIGUÉE", {
-        fontFamily: "Georgia, serif", fontSize: "8px",
+        fontFamily: "Georgia, serif", fontSize: "12px",
         color: "#ff8080", fontStyle: "italic bold",
       }).setOrigin(0.5));
     }
@@ -628,7 +628,7 @@ export class CombatScene extends Phaser.Scene {
     c.add(
       this.add.text(0, h / 2 - 26, nameText, {
         fontFamily: "Georgia, serif",
-        fontSize: "9px",
+        fontSize: "12px",
         color: "#" + palette.accent.toString(16).padStart(6, "0"),
         fontStyle: "bold",
         align: "center",
@@ -638,14 +638,14 @@ export class CombatScene extends Phaser.Scene {
 
     c.add(this.add.text(-w / 2 + 8, h / 2 - 6, `⚔${card.atk}`, {
       fontFamily: "monospace",
-      fontSize: "11px",
+      fontSize: "14px",
       color: "#f08070",
       fontStyle: "bold",
     }).setOrigin(0, 1));
 
     c.add(this.add.text(w / 2 - 8, h / 2 - 6, `❤${card.currentHp}`, {
       fontFamily: "monospace",
-      fontSize: "11px",
+      fontSize: "14px",
       color: card.currentHp < card.hp ? "#ff8080" : "#80c08f",
       fontStyle: "bold",
     }).setOrigin(1, 1));
@@ -659,7 +659,7 @@ export class CombatScene extends Phaser.Scene {
     if (card.sigils && card.sigils.length > 0) {
       card.sigils.slice(0, 3).forEach((sig, idx) => {
         c.add(this.add.text(w / 2 - 4 - idx * 14, -h / 2 + 4, sigilIcons[sig] || "✦", {
-          fontSize: "11px",
+          fontSize: "14px",
         }).setOrigin(1, 0));
       });
     }
@@ -667,27 +667,27 @@ export class CombatScene extends Phaser.Scene {
     // Statuts visibles
     let sty = -h / 2 + 4;
     if ((card.bleeding || 0) > 0) {
-      c.add(this.add.text(-w / 2 + 4, sty, `🩸${card.bleeding}`, { fontSize: "9px", color: "#ff6060" }).setOrigin(0, 0));
+      c.add(this.add.text(-w / 2 + 4, sty, `🩸${card.bleeding}`, { fontSize: "12px", color: "#ff6060" }).setOrigin(0, 0));
       sty += 11;
     }
     if ((card.block || 0) > 0) {
-      c.add(this.add.text(-w / 2 + 4, sty, `🛡${card.block}`, { fontSize: "9px", color: "#60a0e0" }).setOrigin(0, 0));
+      c.add(this.add.text(-w / 2 + 4, sty, `🛡${card.block}`, { fontSize: "12px", color: "#60a0e0" }).setOrigin(0, 0));
       sty += 11;
     }
     if ((card.poisoned || 0) > 0) {
-      c.add(this.add.text(-w / 2 + 4, sty, `🧪${card.poisoned}`, { fontSize: "9px", color: "#80f080" }).setOrigin(0, 0));
+      c.add(this.add.text(-w / 2 + 4, sty, `🧪${card.poisoned}`, { fontSize: "12px", color: "#80f080" }).setOrigin(0, 0));
       sty += 11;
     }
     if ((card.frozen || 0) > 0) {
-      c.add(this.add.text(-w / 2 + 4, sty, `❄${card.frozen}`, { fontSize: "9px", color: "#a0d8f0" }).setOrigin(0, 0));
+      c.add(this.add.text(-w / 2 + 4, sty, `❄${card.frozen}`, { fontSize: "12px", color: "#a0d8f0" }).setOrigin(0, 0));
       sty += 11;
     }
     if ((card.weak || 0) > 0) {
-      c.add(this.add.text(-w / 2 + 4, sty, `⬇${card.weak}`, { fontSize: "9px", color: "#a08080" }).setOrigin(0, 0));
+      c.add(this.add.text(-w / 2 + 4, sty, `⬇${card.weak}`, { fontSize: "12px", color: "#a08080" }).setOrigin(0, 0));
       sty += 11;
     }
     if ((card.strong || 0) > 0) {
-      c.add(this.add.text(-w / 2 + 4, sty, `⬆${card.strong}`, { fontSize: "9px", color: "#f0c080" }).setOrigin(0, 0));
+      c.add(this.add.text(-w / 2 + 4, sty, `⬆${card.strong}`, { fontSize: "12px", color: "#f0c080" }).setOrigin(0, 0));
     }
 
     return c;
@@ -707,7 +707,7 @@ export class CombatScene extends Phaser.Scene {
     bellGfx.fillCircle(0, 12, 4);
     this.bellContainer.add(bellGfx);
     this.bellContainer.add(this.add.text(0, 30, "FIN", {
-      fontFamily: "Georgia, serif", fontSize: "9px", color: "#d4a040", fontStyle: "italic",
+      fontFamily: "Georgia, serif", fontSize: "12px", color: "#d4a040", fontStyle: "italic",
     }).setOrigin(0.5));
 
     const hit = this.add.circle(0, 0, 32, 0x000000, 0.001);
@@ -729,12 +729,13 @@ export class CombatScene extends Phaser.Scene {
     const rerollsLeft = this.rerollMaxUses - (this.rerollUsed ? 1 : 0);
     if (rerollsLeft > 0) {
       const rerollC = this.add.container(60, GAME_HEIGHT - 40);
-      const rBg = this.add.circle(0, 0, 22, 0x2a1810, 0.95);
+      // 22→30 rayon (hit > 44)
+      const rBg = this.add.circle(0, 0, 30, 0x2a1810, 0.95);
       rBg.setStrokeStyle(2, 0x88a040);
       rerollC.add(rBg);
-      rerollC.add(this.add.text(0, 0, "🔄", { fontSize: "18px" }).setOrigin(0.5));
-      rerollC.add(this.add.text(0, 32, `REROLL ${rerollsLeft}`, {
-        fontFamily: "Georgia, serif", fontSize: "8px", color: "#88a040", fontStyle: "italic",
+      rerollC.add(this.add.text(0, 0, "🔄", { fontSize: "26px" }).setOrigin(0.5));
+      rerollC.add(this.add.text(0, 42, `REROLL ${rerollsLeft}`, {
+        fontFamily: "Georgia, serif", fontSize: "13px", color: "#88a040", fontStyle: "italic",
       }).setOrigin(0.5));
       rBg.setInteractive({ useHandCursor: true });
       rBg.on("pointerdown", () => this.rerollHand());
@@ -766,12 +767,14 @@ export class CombatScene extends Phaser.Scene {
     handBg.setStrokeStyle(1, 0x8a5018, 0.6);
     this.handContainer.add(handBg);
 
-    const cardW = 76;
-    const cardH = 116;
-    const gap = 6;
+    // Cartes en main agrandies (76→90, 116→136) — lisibilité mobile
+    // Avec HAND_LIMIT=6 : 6×90 + 5×4 = 560 → tout juste en 540, on ajuste à 6 cartes
+    const cardW = this.hand.length >= 6 ? 82 : 90;
+    const cardH = 136;
+    const gap = 4;
     const totalW = this.hand.length * (cardW + gap) - gap;
     const startX = (GAME_WIDTH - totalW) / 2 + cardW / 2;
-    const handY = GAME_HEIGHT - 140;
+    const handY = GAME_HEIGHT - 150;
 
     this.hand.forEach((card, i) => {
       const x = startX + i * (cardW + gap);
@@ -794,7 +797,7 @@ export class CombatScene extends Phaser.Scene {
 
       // A.8 — anomalie : effet visuel particulier
       if (card.anomaly === "weeps") {
-        const tear = this.add.text(0, -cardH / 2 + 40, "💧", { fontSize: "10px" }).setOrigin(0.5);
+        const tear = this.add.text(0, -cardH / 2 + 40, "💧", { fontSize: "13px" }).setOrigin(0.5);
         c.add(tear);
         this.tweens.add({ targets: tear, y: tear.y + 30, alpha: 0, duration: 1500, repeat: -1 });
       }
@@ -830,13 +833,13 @@ export class CombatScene extends Phaser.Scene {
       costCircle.setStrokeStyle(2, palette.accent);
       c.add(costCircle);
       c.add(this.add.text(-cardW / 2 + 13, -cardH / 2 + 13, String(card.cost), {
-        fontFamily: "monospace", fontSize: "10px", color: "#fff5dc", fontStyle: "bold",
+        fontFamily: "monospace", fontSize: "13px", color: "#fff5dc", fontStyle: "bold",
       }).setOrigin(0.5));
 
       // Niveau de carte (G.3)
       if (card.cardLevel && card.cardLevel > 1) {
         c.add(this.add.text(cardW / 2 - 13, -cardH / 2 + 13, "★".repeat(card.cardLevel - 1), {
-          fontSize: "9px", color: "#ffd870",
+          fontSize: "12px", color: "#ffd870",
         }).setOrigin(0.5));
       }
 
@@ -856,16 +859,16 @@ export class CombatScene extends Phaser.Scene {
       let nm = card.name;
       if (card.consecrated) nm += "✨";
       c.add(this.add.text(0, cardH / 2 - 26, nm, {
-        fontFamily: "Georgia, serif", fontSize: "9px",
+        fontFamily: "Georgia, serif", fontSize: "12px",
         color: "#" + palette.accent.toString(16).padStart(6, "0"),
         fontStyle: "bold", align: "center", wordWrap: { width: cardW - 6 },
       }).setOrigin(0.5));
 
       c.add(this.add.text(-cardW / 2 + 8, cardH / 2 - 6, `⚔${card.atk}`, {
-        fontFamily: "monospace", fontSize: "10px", color: "#f08070", fontStyle: "bold",
+        fontFamily: "monospace", fontSize: "13px", color: "#f08070", fontStyle: "bold",
       }).setOrigin(0, 1));
       c.add(this.add.text(cardW / 2 - 8, cardH / 2 - 6, `❤${card.hp}`, {
-        fontFamily: "monospace", fontSize: "10px", color: "#80c08f", fontStyle: "bold",
+        fontFamily: "monospace", fontSize: "13px", color: "#80c08f", fontStyle: "bold",
       }).setOrigin(1, 1));
 
       const sigilIconsHand: Record<string, string> = {
@@ -876,7 +879,7 @@ export class CombatScene extends Phaser.Scene {
       if (card.sigils && card.sigils.length > 0) {
         card.sigils.slice(0, 3).forEach((sig, idx) => {
           c.add(this.add.text(cardW / 2 - 4 - idx * 12, -cardH / 2 + 4, sigilIconsHand[sig] || "✦", {
-            fontSize: "10px",
+            fontSize: "13px",
           }).setOrigin(1, 0));
         });
       }
@@ -917,7 +920,7 @@ export class CombatScene extends Phaser.Scene {
         if (this.longPressTimer) clearTimeout(this.longPressTimer);
         this.longPressTimer = setTimeout(() => {
           if (!c.getData("dragging")) this.showCardZoom(card);
-        }, 500);
+        }, 350);
       });
       bg.on("pointerup", () => {
         if (this.longPressTimer) { clearTimeout(this.longPressTimer); this.longPressTimer = null; }
@@ -988,7 +991,7 @@ export class CombatScene extends Phaser.Scene {
     this.hudContainer.add(marker);
 
     this.bossHpText = this.add.text(GAME_WIDTH / 2, bossBarY, `${this.circleDef.bossName}  ${bossHp}/${this.bossMaxHp}`, {
-      fontFamily: "monospace", fontSize: "10px", color: "#fff5dc", fontStyle: "bold",
+      fontFamily: "monospace", fontSize: "13px", color: "#fff5dc", fontStyle: "bold",
     }).setOrigin(0.5);
     this.hudContainer.add(this.bossHpText);
 
@@ -1005,7 +1008,7 @@ export class CombatScene extends Phaser.Scene {
     );
     this.hudContainer.add(this.playerHpBar);
     this.playerHpText = this.add.text(GAME_WIDTH / 2, playerHpY, `❤ Toi  ${this.playerHp}/${this.playerMaxHp}`, {
-      fontFamily: "monospace", fontSize: "11px", color: "#fff5dc", fontStyle: "bold",
+      fontFamily: "monospace", fontSize: "14px", color: "#fff5dc", fontStyle: "bold",
     }).setOrigin(0.5);
     this.hudContainer.add(this.playerHpText);
 
@@ -1013,26 +1016,27 @@ export class CombatScene extends Phaser.Scene {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 4);
 
-    const panelW = 130;
-    const panelH = 64;
+    // Panel ÂME agrandi : 130×64 → 170×92, lignes 11→16px
+    const panelW = 170;
+    const panelH = 92;
     const px = GAME_WIDTH - panelW - 8;
     const py = 200;
-    const bg2 = this.add.rectangle(px, py, panelW, panelH, 0x000000, 0.6);
+    const bg2 = this.add.rectangle(px, py, panelW, panelH, 0x000000, 0.7);
     bg2.setOrigin(0, 0);
-    bg2.setStrokeStyle(1, 0x8a5018, 0.5);
+    bg2.setStrokeStyle(1, 0x8a5018, 0.7);
     this.hudContainer.add(bg2);
 
-    this.hudContainer.add(this.add.text(px + 6, py + 4, "ÂME", {
-      fontFamily: "monospace", fontSize: "9px", color: "#d4a040",
+    this.hudContainer.add(this.add.text(px + 8, py + 6, "ÂME", {
+      fontFamily: "monospace", fontSize: "13px", color: "#d4a040", fontStyle: "bold",
     }));
 
     top.forEach((entry, i) => {
       const [axis, val] = entry;
       const palette = AXIS_COLOR[axis];
-      const yo = py + 16 + i * 11;
-      this.hudContainer?.add(this.add.circle(px + 8, yo + 4, 3, palette.secondary));
-      this.hudContainer?.add(this.add.text(px + 14, yo, `${axis} ${val}`, {
-        fontFamily: "monospace", fontSize: "8px",
+      const yo = py + 24 + i * 16;
+      this.hudContainer?.add(this.add.circle(px + 12, yo + 6, 4, palette.secondary));
+      this.hudContainer?.add(this.add.text(px + 20, yo, `${axis} ${val}`, {
+        fontFamily: "monospace", fontSize: "13px",
         color: "#" + palette.accent.toString(16).padStart(6, "0"),
       }));
     });
@@ -1040,7 +1044,7 @@ export class CombatScene extends Phaser.Scene {
     // D.5 — appease stacks
     if (this.bossSpecials.includes("appeasable") && this.bossPhase === 1 && this.appeaseStacks > 0) {
       this.hudContainer.add(this.add.text(8, 200, `🕊 Apaisement: ${this.appeaseStacks}/3`, {
-        fontFamily: "monospace", fontSize: "10px", color: "#88e0a0",
+        fontFamily: "monospace", fontSize: "13px", color: "#88e0a0",
       }));
     }
 
@@ -1060,20 +1064,20 @@ export class CombatScene extends Phaser.Scene {
       this.hudContainer.add(this.add.text(GAME_WIDTH / 2, synY,
         `✦ Synergie: ${synergies.map(([a]) => a).join(" + ")}`,
         {
-          fontFamily: "Georgia, serif", fontSize: "9px",
+          fontFamily: "Georgia, serif", fontSize: "12px",
           color: "#88e0a0", fontStyle: "italic bold",
         }
       ).setOrigin(0.5));
     }
 
-    // Bouton Légende (i) en haut-gauche
-    const legendBtn = this.add.container(20, 175);
-    const lBg = this.add.circle(0, 0, 12, 0x2a1810, 0.95);
-    lBg.setStrokeStyle(1, 0xa87a3a);
+    // Bouton Légende (?) en haut-gauche : 12→24px rayon (hit area 48px)
+    const legendBtn = this.add.container(36, 180);
+    const lBg = this.add.circle(0, 0, 24, 0x2a1810, 0.95);
+    lBg.setStrokeStyle(2, 0xa87a3a);
     legendBtn.add(lBg);
     legendBtn.add(this.add.text(0, 0, "?", {
-      fontFamily: "Georgia, serif", fontSize: "12px",
-      color: "#a87a3a", fontStyle: "bold",
+      fontFamily: "Georgia, serif", fontSize: "26px",
+      color: "#d4a040", fontStyle: "bold",
     }).setOrigin(0.5));
     lBg.setInteractive({ useHandCursor: true });
     lBg.on("pointerdown", () => this.showLegend());
@@ -1145,13 +1149,13 @@ export class CombatScene extends Phaser.Scene {
     let y = 110;
     sections.forEach((sec) => {
       this.legendOverlay?.add(this.add.text(GAME_WIDTH / 2, y, sec.title, {
-        fontFamily: "Georgia, serif", fontSize: "13px",
+        fontFamily: "Georgia, serif", fontSize: "15px",
         color: "#ffd870", fontStyle: "bold",
       }).setOrigin(0.5));
       y += 22;
       sec.entries.forEach((e) => {
         this.legendOverlay?.add(this.add.text(GAME_WIDTH / 2, y, e, {
-          fontFamily: "Georgia, serif", fontSize: "11px",
+          fontFamily: "Georgia, serif", fontSize: "14px",
           color: "#f0d8b0",
           align: "center", wordWrap: { width: GAME_WIDTH - 40 },
         }).setOrigin(0.5));
@@ -1161,7 +1165,7 @@ export class CombatScene extends Phaser.Scene {
     });
 
     this.legendOverlay.add(this.add.text(GAME_WIDTH / 2, GAME_HEIGHT - 30, "Touche pour fermer", {
-      fontFamily: "Georgia, serif", fontSize: "11px",
+      fontFamily: "Georgia, serif", fontSize: "14px",
       color: "#a87a3a", fontStyle: "italic",
     }).setOrigin(0.5));
   }
@@ -1844,7 +1848,7 @@ export class CombatScene extends Phaser.Scene {
 
     if (card.flavor) {
       this.cardZoomOverlay.add(this.add.text(cx, cy + 20, `« ${card.flavor} »`, {
-        fontFamily: "Georgia, serif", fontSize: "11px",
+        fontFamily: "Georgia, serif", fontSize: "14px",
         color: "#a87a3a", fontStyle: "italic",
         align: "center", wordWrap: { width: cardW - 40 },
       }).setOrigin(0.5));
@@ -1858,14 +1862,14 @@ export class CombatScene extends Phaser.Scene {
 
     if (card.effect) {
       this.cardZoomOverlay.add(this.add.text(cx, cy + 80, card.effect, {
-        fontFamily: "Georgia, serif", fontSize: "13px",
+        fontFamily: "Georgia, serif", fontSize: "15px",
         color: "#f0d8b0", align: "center", wordWrap: { width: cardW - 40 },
       }).setOrigin(0.5));
     }
 
     if (card.anomalyMessage) {
       this.cardZoomOverlay.add(this.add.text(cx, cy + 100, `⚠ ${card.anomalyMessage}`, {
-        fontFamily: "Georgia, serif", fontSize: "10px",
+        fontFamily: "Georgia, serif", fontSize: "13px",
         color: "#ff8080", fontStyle: "italic",
         align: "center", wordWrap: { width: cardW - 40 },
       }).setOrigin(0.5));
@@ -1890,7 +1894,7 @@ export class CombatScene extends Phaser.Scene {
         const meta = labels[sig];
         if (!meta) return;
         this.cardZoomOverlay?.add(this.add.text(cx - cardW / 2 + 20, sy, `${meta.icon} ${meta.desc}`, {
-          fontFamily: "Georgia, serif", fontSize: "11px",
+          fontFamily: "Georgia, serif", fontSize: "14px",
           color: "#a87a3a", wordWrap: { width: cardW - 40 },
         }));
         sy += 18;
@@ -1905,7 +1909,7 @@ export class CombatScene extends Phaser.Scene {
     }).setOrigin(1, 0));
 
     this.cardZoomOverlay.add(this.add.text(cx, cy + cardH / 2 + 30, "Touche pour fermer", {
-      fontFamily: "Georgia, serif", fontSize: "11px", color: "#a87a3a", fontStyle: "italic",
+      fontFamily: "Georgia, serif", fontSize: "14px", color: "#a87a3a", fontStyle: "italic",
     }).setOrigin(0.5));
 
     this.cardZoomOverlay.setScale(0);
@@ -1943,7 +1947,7 @@ export class CombatScene extends Phaser.Scene {
     recordCombatResult(this.circleDef.id, result);
 
     this.time.delayedCall(800, () => {
-      this.cameras.main.fadeOut(1000, 0, 0, 0);
+      this.cameras.main.fadeOut(500, 0, 0, 0);
       this.cameras.main.once("camerafadeoutcomplete", () => {
         this.scene.start("Outcome");
       });

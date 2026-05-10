@@ -66,7 +66,7 @@ export class EndingScene extends Phaser.Scene {
     this.tweens.add({ targets: title, alpha: 1, duration: 2000 });
 
     const body = this.add.text(GAME_WIDTH / 2, 280, def.body, {
-      fontFamily: "Georgia, serif", fontSize: "14px",
+      fontFamily: "Georgia, serif", fontSize: "16px",
       color: "#f0d8b0", fontStyle: "italic",
       align: "center", wordWrap: { width: GAME_WIDTH - 60 },
     }).setOrigin(0.5);
@@ -76,7 +76,7 @@ export class EndingScene extends Phaser.Scene {
     // F.6 — lettre auto-générée
     const letter = this.generateLetter(ending);
     const letterT = this.add.text(GAME_WIDTH / 2, 540, letter, {
-      fontFamily: "Georgia, serif", fontSize: "12px",
+      fontFamily: "Georgia, serif", fontSize: "14px",
       color: "#a87a3a", fontStyle: "italic",
       align: "center", wordWrap: { width: GAME_WIDTH - 80 },
     }).setOrigin(0.5);
@@ -85,7 +85,7 @@ export class EndingScene extends Phaser.Scene {
 
     if (page) {
       const codexHint = this.add.text(GAME_WIDTH / 2, 720, `+ Page ${page.id + 1} dans le Codex`, {
-        fontFamily: "Georgia, serif", fontSize: "11px",
+        fontFamily: "Georgia, serif", fontSize: "14px",
         color: "#88e0a0", fontStyle: "italic",
       }).setOrigin(0.5);
       codexHint.setAlpha(0);
@@ -98,7 +98,7 @@ export class EndingScene extends Phaser.Scene {
     bgB.setStrokeStyle(2, 0x88a040);
     ngBtn.add(bgB);
     ngBtn.add(this.add.text(0, 0, `NG+ (cycle ${GameState.ngPlus + 1})`, {
-      fontFamily: "Georgia, serif", fontSize: "14px",
+      fontFamily: "Georgia, serif", fontSize: "16px",
       color: "#88a040", fontStyle: "italic",
     }).setOrigin(0.5));
     ngBtn.setAlpha(0);
@@ -107,7 +107,7 @@ export class EndingScene extends Phaser.Scene {
     bgB.on("pointerdown", () => {
       incrementNGPlus();
       audio.sfx("click");
-      this.cameras.main.fadeOut(800, 0, 0, 0);
+      this.cameras.main.fadeOut(400, 0, 0, 0);
       this.cameras.main.once("camerafadeoutcomplete", () => this.scene.start("Boot"));
     });
 
@@ -116,8 +116,8 @@ export class EndingScene extends Phaser.Scene {
     bgC.setStrokeStyle(1, 0x666666);
     back.add(bgC);
     back.add(this.add.text(0, 0, "Retour menu", {
-      fontFamily: "Georgia, serif", fontSize: "11px",
-      color: "#a0a0a0", fontStyle: "italic",
+      fontFamily: "Georgia, serif", fontSize: "14px",
+      color: "#c0c0c0", fontStyle: "italic",
     }).setOrigin(0.5));
     back.setAlpha(0);
     this.tweens.add({ targets: back, alpha: 1, duration: 1000, delay: 6500 });

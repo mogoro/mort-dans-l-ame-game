@@ -38,7 +38,7 @@ export class MarketScene extends Phaser.Scene {
     }).setOrigin(0.5);
 
     this.add.text(GAME_WIDTH / 2, 80, `Or : ${GameState.gold}`, {
-      fontFamily: "monospace", fontSize: "16px", color: "#ffd870",
+      fontFamily: "monospace", fontSize: "18px", color: "#ffd870",
     }).setOrigin(0.5);
 
     // 3 offres
@@ -59,7 +59,7 @@ export class MarketScene extends Phaser.Scene {
     bgB.setStrokeStyle(2, 0x88a040);
     btn.add(bgB);
     btn.add(this.add.text(0, 0, "AU SUIVANT →", {
-      fontFamily: "Georgia, serif", fontSize: "16px",
+      fontFamily: "Georgia, serif", fontSize: "18px",
       color: "#88a040", fontStyle: "italic",
     }).setOrigin(0.5));
     bgB.setInteractive({ useHandCursor: true });
@@ -81,16 +81,16 @@ export class MarketScene extends Phaser.Scene {
     c.add(bg);
 
     c.add(this.add.text(0, -30, offer.name, {
-      fontFamily: "Georgia, serif", fontSize: "16px",
+      fontFamily: "Georgia, serif", fontSize: "18px",
       color: "#f0d8b0", fontStyle: "bold",
     }).setOrigin(0.5));
     c.add(this.add.text(0, -8, offer.description, {
-      fontFamily: "Georgia, serif", fontSize: "12px",
+      fontFamily: "Georgia, serif", fontSize: "14px",
       color: "#a87a3a", fontStyle: "italic",
       wordWrap: { width: w - 40 }, align: "center",
     }).setOrigin(0.5));
     c.add(this.add.text(0, 30, `${offer.goldCost} or`, {
-      fontFamily: "monospace", fontSize: "14px",
+      fontFamily: "monospace", fontSize: "16px",
       color: GameState.gold >= offer.goldCost ? "#ffd870" : "#666666",
     }).setOrigin(0.5));
 
@@ -174,11 +174,11 @@ export class MarketScene extends Phaser.Scene {
     bg.setStrokeStyle(2, 0xc83838);
     c.add(bg);
     c.add(this.add.text(0, -10, "MAUDIRE TON DECK", {
-      fontFamily: "Georgia, serif", fontSize: "14px",
+      fontFamily: "Georgia, serif", fontSize: "16px",
       color: "#ff8080", fontStyle: "bold",
     }).setOrigin(0.5));
     c.add(this.add.text(0, 12, "+1 carte maudite, +15 pts axe permanent run", {
-      fontFamily: "Georgia, serif", fontSize: "10px",
+      fontFamily: "Georgia, serif", fontSize: "13px",
       color: "#a87a3a", fontStyle: "italic",
     }).setOrigin(0.5));
     bg.setInteractive({ useHandCursor: true });
@@ -208,11 +208,11 @@ export class MarketScene extends Phaser.Scene {
     bg.setStrokeStyle(2, 0xa080d0);
     c.add(bg);
     c.add(this.add.text(0, -10, "COMBAT ÉLITE (risk/reward)", {
-      fontFamily: "Georgia, serif", fontSize: "14px",
+      fontFamily: "Georgia, serif", fontSize: "16px",
       color: "#e0a8e0", fontStyle: "bold",
     }).setOrigin(0.5));
     c.add(this.add.text(0, 12, "Boss +50% HP +30% ATK · 2× récompenses", {
-      fontFamily: "Georgia, serif", fontSize: "10px",
+      fontFamily: "Georgia, serif", fontSize: "13px",
       color: "#a87a3a", fontStyle: "italic",
     }).setOrigin(0.5));
     bg.setInteractive({ useHandCursor: true });

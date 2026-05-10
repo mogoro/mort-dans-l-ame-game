@@ -20,26 +20,26 @@ export class ImprintScene extends Phaser.Scene {
     }).setOrigin(0.5);
 
     this.add.text(GAME_WIDTH / 2, 80, "Une carte jouée 10× modifie ton axe de +5 permanent.", {
-      fontFamily: "Georgia, serif", fontSize: "11px", color: "#a87a3a", fontStyle: "italic",
+      fontFamily: "Georgia, serif", fontSize: "14px", color: "#a87a3a", fontStyle: "italic",
       wordWrap: { width: GAME_WIDTH - 60 }, align: "center",
     }).setOrigin(0.5);
 
     // Boosts permanents
     this.add.text(GAME_WIDTH / 2, 130, "Boosts permanents :", {
-      fontFamily: "Georgia, serif", fontSize: "13px", color: "#88e0a0",
+      fontFamily: "Georgia, serif", fontSize: "15px", color: "#88e0a0",
     }).setOrigin(0.5);
     let yo = 160;
     const boosts = Object.entries(GameState.imprint.permanentBoosts).filter(([, v]) => v > 0);
     if (boosts.length === 0) {
       this.add.text(GAME_WIDTH / 2, yo, "Aucun pour l'instant.", {
-        fontFamily: "Georgia, serif", fontSize: "12px",
-        color: "#666666", fontStyle: "italic",
+        fontFamily: "Georgia, serif", fontSize: "14px",
+        color: "#c0c0c0", fontStyle: "italic",
       }).setOrigin(0.5);
       yo += 30;
     } else {
       boosts.forEach(([axis, val]) => {
         this.add.text(GAME_WIDTH / 2, yo, `${axis}  +${val}`, {
-          fontFamily: "monospace", fontSize: "13px", color: "#88e0a0",
+          fontFamily: "monospace", fontSize: "15px", color: "#88e0a0",
         }).setOrigin(0.5);
         yo += 22;
       });
@@ -52,7 +52,7 @@ export class ImprintScene extends Phaser.Scene {
 
     if (usage.length > 0) {
       this.add.text(GAME_WIDTH / 2, yo + 20, "Cartes les plus jouées :", {
-        fontFamily: "Georgia, serif", fontSize: "13px", color: "#d4a040",
+        fontFamily: "Georgia, serif", fontSize: "15px", color: "#d4a040",
       }).setOrigin(0.5);
       yo += 50;
       usage.forEach(([id, count]) => {
@@ -60,7 +60,7 @@ export class ImprintScene extends Phaser.Scene {
         const name = card ? card.name : id;
         const next = 10 - (count % 10);
         this.add.text(GAME_WIDTH / 2, yo, `${name}  ${count}× (prochain boost dans ${next})`, {
-          fontFamily: "monospace", fontSize: "10px", color: "#a87a3a",
+          fontFamily: "monospace", fontSize: "13px", color: "#a87a3a",
         }).setOrigin(0.5);
         yo += 18;
       });
@@ -72,7 +72,7 @@ export class ImprintScene extends Phaser.Scene {
     bgB.setStrokeStyle(2, 0x88a040);
     back.add(bgB);
     back.add(this.add.text(0, 0, "Retour", {
-      fontFamily: "Georgia, serif", fontSize: "14px", color: "#88a040", fontStyle: "italic",
+      fontFamily: "Georgia, serif", fontSize: "16px", color: "#88a040", fontStyle: "italic",
     }).setOrigin(0.5));
     bgB.setInteractive({ useHandCursor: true });
     bgB.on("pointerdown", () => {

@@ -85,7 +85,7 @@ export class NPCInterstitialScene extends Phaser.Scene {
     }
     this.npc = npc;
     this.dialog = this.pickDialog(npc);
-    this.cameras.main.fadeIn(700, 0, 0, 0);
+    this.cameras.main.fadeIn(400, 0, 0, 0);
     this.renderScene();
   }
 
@@ -132,13 +132,13 @@ export class NPCInterstitialScene extends Phaser.Scene {
       ? `Relation : ${this.npc.relation > 0 ? "+" : ""}${this.npc.relation}`
       : "Disparu(e)";
     this.add.text(GAME_WIDTH / 2, 320, relText, {
-      fontFamily: "monospace", fontSize: "11px",
+      fontFamily: "monospace", fontSize: "14px",
       color: this.npc.alive ? (this.npc.relation > 0 ? "#88e0a0" : "#e08080") : "#666666",
     }).setOrigin(0.5);
 
     // Message
     const msg = this.add.text(GAME_WIDTH / 2, 420, this.dialog.message, {
-      fontFamily: "Georgia, serif", fontSize: "14px",
+      fontFamily: "Georgia, serif", fontSize: "16px",
       color: "#f0d8b0", fontStyle: "italic",
       align: "center", wordWrap: { width: GAME_WIDTH - 60 },
     }).setOrigin(0.5);
@@ -164,7 +164,7 @@ export class NPCInterstitialScene extends Phaser.Scene {
 
     if (giftLabel) {
       const giftT = this.add.text(GAME_WIDTH / 2, 540, giftLabel, {
-        fontFamily: "monospace", fontSize: "16px",
+        fontFamily: "monospace", fontSize: "18px",
         color: "#ffd870", fontStyle: "bold",
       }).setOrigin(0.5);
       giftT.setAlpha(0);
@@ -177,7 +177,7 @@ export class NPCInterstitialScene extends Phaser.Scene {
     bgB.setStrokeStyle(2, 0x88a040);
     btn.add(bgB);
     btn.add(this.add.text(0, 0, "Continuer", {
-      fontFamily: "Georgia, serif", fontSize: "14px",
+      fontFamily: "Georgia, serif", fontSize: "16px",
       color: "#88a040", fontStyle: "italic",
     }).setOrigin(0.5));
     btn.setAlpha(0);

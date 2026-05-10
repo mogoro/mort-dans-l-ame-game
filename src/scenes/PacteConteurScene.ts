@@ -9,7 +9,7 @@ export class PacteConteurScene extends Phaser.Scene {
   constructor() { super("PacteConteur"); }
 
   create(): void {
-    this.cameras.main.fadeIn(700, 0, 0, 0);
+    this.cameras.main.fadeIn(400, 0, 0, 0);
 
     const bg = this.add.graphics();
     bg.fillGradientStyle(0x0a0a14, 0x0a0a14, 0x1a1428, 0x1a1428, 1);
@@ -22,7 +22,7 @@ export class PacteConteurScene extends Phaser.Scene {
     this.add.text(GAME_WIDTH / 2, 130,
       "Une voix — pas la tienne — te propose : « Je peux réécrire le passé. Choisis un trait que tu n'as jamais eu. Mais perd les cartes qui en sont nées. »",
       {
-        fontFamily: "Georgia, serif", fontSize: "13px",
+        fontFamily: "Georgia, serif", fontSize: "15px",
         color: "#a87a3a", fontStyle: "italic",
         align: "center", wordWrap: { width: GAME_WIDTH - 60 },
       }).setOrigin(0.5);
@@ -43,8 +43,8 @@ export class PacteConteurScene extends Phaser.Scene {
     bgB.setStrokeStyle(2, 0x666666);
     skip.add(bgB);
     skip.add(this.add.text(0, 0, "Refuser le pacte", {
-      fontFamily: "Georgia, serif", fontSize: "13px",
-      color: "#a0a0a0", fontStyle: "italic",
+      fontFamily: "Georgia, serif", fontSize: "15px",
+      color: "#c0c0c0", fontStyle: "italic",
     }).setOrigin(0.5));
     bgB.setInteractive({ useHandCursor: true });
     bgB.on("pointerdown", () => {
@@ -60,16 +60,16 @@ export class PacteConteurScene extends Phaser.Scene {
     bg.setStrokeStyle(2, 0xa080d0);
     c.add(bg);
     c.add(this.add.text(0, -20, `« Tu n'as jamais été ${axis}. »`, {
-      fontFamily: "Georgia, serif", fontSize: "13px",
+      fontFamily: "Georgia, serif", fontSize: "15px",
       color: "#e0a8e0", fontStyle: "italic", align: "center",
     }).setOrigin(0.5));
     const linkedCards = GameState.deck.filter((c) => c.axis === axis).length;
     c.add(this.add.text(0, 4, `Pouvoir : -30 ${axis}, +50 sur les autres axes liés`, {
-      fontFamily: "Georgia, serif", fontSize: "11px",
+      fontFamily: "Georgia, serif", fontSize: "14px",
       color: "#88e0a0", fontStyle: "italic",
     }).setOrigin(0.5));
     c.add(this.add.text(0, 22, `Coût : ${linkedCards} carte(s) effacée(s)`, {
-      fontFamily: "monospace", fontSize: "10px", color: "#ff8080",
+      fontFamily: "monospace", fontSize: "13px", color: "#ff8080",
     }).setOrigin(0.5));
 
     bg.setInteractive({ useHandCursor: true });

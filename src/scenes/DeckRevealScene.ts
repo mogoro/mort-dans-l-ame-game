@@ -22,7 +22,7 @@ export class DeckRevealScene extends Phaser.Scene {
     // C.2 relique pièce de Charon : +10 or
     if (hasRelic("start_gold_10")) GameState.gold += 10;
 
-    this.cameras.main.fadeIn(1000, 0, 0, 0);
+    this.cameras.main.fadeIn(500, 0, 0, 0);
     saveCurrentRun(snapshotRun("DeckReveal"));
     this.renderReveal();
   }
@@ -45,7 +45,7 @@ export class DeckRevealScene extends Phaser.Scene {
     this.tweens.add({ targets: subtitle, alpha: 1, duration: 2000, delay: 1000 });
 
     const deckTitle = this.add.text(GAME_WIDTH / 2, 220, "TON DECK INITIAL", {
-      fontFamily: "Georgia, serif", fontSize: "16px",
+      fontFamily: "Georgia, serif", fontSize: "18px",
       color: "#d4a040", fontStyle: "bold",
     }).setOrigin(0.5).setAlpha(0);
     this.tweens.add({ targets: deckTitle, alpha: 1, duration: 800, delay: 2200 });
@@ -58,7 +58,7 @@ export class DeckRevealScene extends Phaser.Scene {
     btnBg.setStrokeStyle(2, 0xc83838);
     btnBg.setInteractive({ useHandCursor: true });
     const btnText = this.add.text(0, 0, "Choisir une carte bonus →", {
-      fontFamily: "Georgia, serif", fontSize: "16px",
+      fontFamily: "Georgia, serif", fontSize: "18px",
       color: "#f0d8b0", fontStyle: "bold",
     }).setOrigin(0.5);
     continueBtn.add([btnBg, btnText]);
@@ -86,7 +86,7 @@ export class DeckRevealScene extends Phaser.Scene {
       color: "#d4a040", fontStyle: "italic",
     }).setOrigin(0.5);
     this.add.text(GAME_WIDTH / 2, 90, "Choisis 1 carte sur 3 pour rejoindre ton deck.", {
-      fontFamily: "Georgia, serif", fontSize: "12px",
+      fontFamily: "Georgia, serif", fontSize: "14px",
       color: "#a87a3a", fontStyle: "italic",
     }).setOrigin(0.5);
 
@@ -114,8 +114,8 @@ export class DeckRevealScene extends Phaser.Scene {
     sBg.setStrokeStyle(1, 0x666666);
     skip.add(sBg);
     skip.add(this.add.text(0, 0, "Refuser le bonus", {
-      fontFamily: "Georgia, serif", fontSize: "12px",
-      color: "#a0a0a0", fontStyle: "italic",
+      fontFamily: "Georgia, serif", fontSize: "14px",
+      color: "#c0c0c0", fontStyle: "italic",
     }).setOrigin(0.5));
     sBg.setInteractive({ useHandCursor: true });
     sBg.on("pointerdown", () => this.renderGuardian());
@@ -135,7 +135,7 @@ export class DeckRevealScene extends Phaser.Scene {
       color: "#80c0e0", fontStyle: "italic",
     }).setOrigin(0.5);
     this.add.text(GAME_WIDTH / 2, 90, "Désigne 1 carte indestructible (cœur de ta run).", {
-      fontFamily: "Georgia, serif", fontSize: "12px",
+      fontFamily: "Georgia, serif", fontSize: "14px",
       color: "#80a0c0", fontStyle: "italic",
       wordWrap: { width: GAME_WIDTH - 60 }, align: "center",
     }).setOrigin(0.5);
@@ -158,8 +158,8 @@ export class DeckRevealScene extends Phaser.Scene {
     sBg.setStrokeStyle(1, 0x666666);
     skip.add(sBg);
     skip.add(this.add.text(0, 0, "Pas de gardienne", {
-      fontFamily: "Georgia, serif", fontSize: "12px",
-      color: "#a0a0a0", fontStyle: "italic",
+      fontFamily: "Georgia, serif", fontSize: "14px",
+      color: "#c0c0c0", fontStyle: "italic",
     }).setOrigin(0.5));
     sBg.setInteractive({ useHandCursor: true });
     sBg.on("pointerdown", () => this.renderConsecrate());
@@ -179,7 +179,7 @@ export class DeckRevealScene extends Phaser.Scene {
       color: "#f0d878", fontStyle: "italic",
     }).setOrigin(0.5);
     this.add.text(GAME_WIDTH / 2, 90, "Consacre 1 carte (+ATK +HP). Coût : -10 sur l'axe lié.", {
-      fontFamily: "Georgia, serif", fontSize: "12px",
+      fontFamily: "Georgia, serif", fontSize: "14px",
       color: "#a87a3a", fontStyle: "italic",
       wordWrap: { width: GAME_WIDTH - 60 }, align: "center",
     }).setOrigin(0.5);
@@ -201,15 +201,15 @@ export class DeckRevealScene extends Phaser.Scene {
     sBg.setStrokeStyle(1, 0x666666);
     skip.add(sBg);
     skip.add(this.add.text(0, 0, "Pas de consécration", {
-      fontFamily: "Georgia, serif", fontSize: "12px",
-      color: "#a0a0a0", fontStyle: "italic",
+      fontFamily: "Georgia, serif", fontSize: "14px",
+      color: "#c0c0c0", fontStyle: "italic",
     }).setOrigin(0.5));
     sBg.setInteractive({ useHandCursor: true });
     sBg.on("pointerdown", () => this.goToCombat());
   }
 
   private goToCombat(): void {
-    this.cameras.main.fadeOut(800, 0, 0, 0);
+    this.cameras.main.fadeOut(400, 0, 0, 0);
     this.cameras.main.once("camerafadeoutcomplete", () => {
       GameState.currentCircle = 0;
       this.scene.start("Combat", { circleIdx: 0 });
@@ -271,20 +271,20 @@ export class DeckRevealScene extends Phaser.Scene {
       costCircle.setStrokeStyle(2, palette.accent);
       cardContainer.add(costCircle);
       cardContainer.add(this.add.text(-cardW / 2 + 16, -cardH / 2 + 16, String(card.cost), {
-        fontFamily: "monospace", fontSize: "11px", color: "#fff5dc", fontStyle: "bold",
+        fontFamily: "monospace", fontSize: "14px", color: "#fff5dc", fontStyle: "bold",
       }).setOrigin(0.5));
 
       cardContainer.add(this.add.text(0, cardH / 2 - 28, card.name, {
-        fontFamily: "Georgia, serif", fontSize: "11px",
+        fontFamily: "Georgia, serif", fontSize: "14px",
         color: "#" + palette.accent.toString(16).padStart(6, "0"),
         fontStyle: "bold", align: "center", wordWrap: { width: cardW - 8 },
       }).setOrigin(0.5));
 
       cardContainer.add(this.add.text(-cardW / 2 + 14, cardH / 2 - 8, `⚔${card.atk}`, {
-        fontFamily: "monospace", fontSize: "11px", color: "#f08070", fontStyle: "bold",
+        fontFamily: "monospace", fontSize: "14px", color: "#f08070", fontStyle: "bold",
       }).setOrigin(0, 1));
       cardContainer.add(this.add.text(cardW / 2 - 14, cardH / 2 - 8, `❤${card.hp}`, {
-        fontFamily: "monospace", fontSize: "11px", color: "#80c08f", fontStyle: "bold",
+        fontFamily: "monospace", fontSize: "14px", color: "#80c08f", fontStyle: "bold",
       }).setOrigin(1, 1));
 
       this.tweens.add({
@@ -306,15 +306,15 @@ export class DeckRevealScene extends Phaser.Scene {
 
     c.add(this.add.text(0, -cardH / 4, card.emoji || "✦", { fontSize: "40px" }).setOrigin(0.5));
     c.add(this.add.text(0, cardH / 2 - 32, card.name, {
-      fontFamily: "Georgia, serif", fontSize: "11px",
+      fontFamily: "Georgia, serif", fontSize: "14px",
       color: "#" + palette.accent.toString(16).padStart(6, "0"),
       fontStyle: "bold", align: "center", wordWrap: { width: cardW - 10 },
     }).setOrigin(0.5));
     c.add(this.add.text(-cardW / 2 + 14, cardH / 2 - 10, `⚔${card.atk}`, {
-      fontFamily: "monospace", fontSize: "12px", color: "#f08070", fontStyle: "bold",
+      fontFamily: "monospace", fontSize: "14px", color: "#f08070", fontStyle: "bold",
     }).setOrigin(0, 1));
     c.add(this.add.text(cardW / 2 - 14, cardH / 2 - 10, `❤${card.hp}`, {
-      fontFamily: "monospace", fontSize: "12px", color: "#80c08f", fontStyle: "bold",
+      fontFamily: "monospace", fontSize: "14px", color: "#80c08f", fontStyle: "bold",
     }).setOrigin(1, 1));
 
     bg.setInteractive({ useHandCursor: true });

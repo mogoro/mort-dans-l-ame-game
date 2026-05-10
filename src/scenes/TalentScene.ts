@@ -31,7 +31,7 @@ export class TalentScene extends Phaser.Scene {
       fontFamily: "Georgia, serif", fontSize: "22px", color: "#d4a040", fontStyle: "italic",
     }).setOrigin(0.5);
     this.add.text(GAME_WIDTH / 2, 80, `Points : ${GameState.talents.points}`, {
-      fontFamily: "monospace", fontSize: "14px", color: "#ffd870",
+      fontFamily: "monospace", fontSize: "16px", color: "#ffd870",
     }).setOrigin(0.5);
 
     const disciplines: Discipline[] = ["Guerre", "Sagesse", "Compassion", "Calme", "Foi"];
@@ -45,7 +45,7 @@ export class TalentScene extends Phaser.Scene {
     bgB.setStrokeStyle(2, 0x88a040);
     back.add(bgB);
     back.add(this.add.text(0, 0, "Retour", {
-      fontFamily: "Georgia, serif", fontSize: "14px", color: "#88a040", fontStyle: "italic",
+      fontFamily: "Georgia, serif", fontSize: "16px", color: "#88a040", fontStyle: "italic",
     }).setOrigin(0.5));
     bgB.setInteractive({ useHandCursor: true });
     bgB.on("pointerdown", () => {
@@ -64,12 +64,12 @@ export class TalentScene extends Phaser.Scene {
     c.add(bg);
 
     c.add(this.add.text(-w / 2 + 16, -h / 2 + 12, disc, {
-      fontFamily: "Georgia, serif", fontSize: "16px", color: "#" + palette.accent.toString(16).padStart(6, "0"), fontStyle: "bold",
+      fontFamily: "Georgia, serif", fontSize: "18px", color: "#" + palette.accent.toString(16).padStart(6, "0"), fontStyle: "bold",
     }));
 
     const lvl = talentLevel(disc);
     c.add(this.add.text(w / 2 - 16, -h / 2 + 12, `Niveau ${lvl}/3`, {
-      fontFamily: "monospace", fontSize: "11px", color: "#a87a3a",
+      fontFamily: "monospace", fontSize: "14px", color: "#a87a3a",
     }).setOrigin(1, 0));
 
     // 3 niveaux avec descriptions
@@ -80,10 +80,10 @@ export class TalentScene extends Phaser.Scene {
       const unlocked = lvl >= nLevel;
       const color = unlocked ? "#" + palette.accent.toString(16).padStart(6, "0") : "#666666";
       c.add(this.add.text(-w / 2 + 16, ny, `${unlocked ? "✓" : "○"} ${node.name}`, {
-        fontFamily: "Georgia, serif", fontSize: "11px", color, fontStyle: unlocked ? "bold" : "italic",
+        fontFamily: "Georgia, serif", fontSize: "14px", color, fontStyle: unlocked ? "bold" : "italic",
       }));
       c.add(this.add.text(160, ny, node.description, {
-        fontFamily: "Georgia, serif", fontSize: "10px",
+        fontFamily: "Georgia, serif", fontSize: "13px",
         color: unlocked ? "#a87a3a" : "#666666",
         wordWrap: { width: w - 200 }, fontStyle: "italic",
       }));
@@ -92,7 +92,7 @@ export class TalentScene extends Phaser.Scene {
     // Bouton dépense
     if (GameState.talents.points > 0 && lvl < 3) {
       const btn = this.add.text(w / 2 - 16, h / 2 - 12, "[ Investir 1 pt ]", {
-        fontFamily: "Georgia, serif", fontSize: "11px",
+        fontFamily: "Georgia, serif", fontSize: "14px",
         color: "#88e0a0", fontStyle: "bold italic",
       }).setOrigin(1, 1);
       btn.setInteractive({ useHandCursor: true });
